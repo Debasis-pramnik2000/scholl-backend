@@ -102,7 +102,7 @@ app.use('/api', limiter);
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://mansinghabarh-mvh.vercel.app/'  
+    'https://mansinghabarh-mvh.vercel.app'  
   ],
   credentials: true
 }));

@@ -652,7 +652,6 @@ exports.bulkApproveAdmissions = async (req, res) => {
           password,
           role: 'student',
           name: admission.studentName,
-          email: null,
           phone: admission.mobile,
           isActive: true,
           admissionSource: 'online',

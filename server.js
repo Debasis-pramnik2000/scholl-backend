@@ -102,13 +102,10 @@ app.use('/api', limiter);
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://scholl-frontend-new.vercel.app'
+    '*'  
   ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true
 }));
-
 // ==================== 7. MODELS ====================
 
 const User = require('./src/models/User.js');

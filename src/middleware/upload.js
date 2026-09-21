@@ -2,19 +2,26 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// ==================== ENSURE UPLOAD DIRECTORIES ====================
-const profileDir = 'uploads/profiles';
-const admissionDir = 'uploads/admissions';
+// ==================== ABSOLUTE PATHS ====================
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+const profileDir = path.join(PROJECT_ROOT, 'uploads', 'profiles');
+const admissionDir = path.join(PROJECT_ROOT, 'uploads', 'admissions');
 
+console.log('📁 Profile Dir:', profileDir);
+console.log('📁 Admission Dir:', admissionDir);
+
+// Ensure directories exist
 [profileDir, admissionDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
+    console.log('✅ Created:', dir);
+  } else {
+    console.log('✅ Exists:', dir);
   }
 });
 
 // ==================== STORAGE CONFIGURATIONS ====================
 
-// ✅ Profile Photo Storage
 const profileStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, profileDir);
@@ -27,7 +34,6 @@ const profileStorage = multer.diskStorage({
   }
 });
 
-// ✅ Admission Document Storage
 const admissionStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, admissionDir);
@@ -42,7 +48,6 @@ const admissionStorage = multer.diskStorage({
 
 // ==================== FILE FILTERS ====================
 
-// ✅ Profile Image Filter (Only Images)
 const imageFilter = (req, file, cb) => {
   const allowedTypes = [
     'image/jpeg',
@@ -59,7 +64,6 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-// ✅ Admission Document Filter (Images + PDF)
 const admissionFilter = (req, file, cb) => {
   const allowedTypes = [
     'image/jpeg',
@@ -78,25 +82,23 @@ const admissionFilter = (req, file, cb) => {
 
 // ==================== MULTER INSTANCES ====================
 
-// ✅ Profile Upload (Single Image) - For Profile Photo
 const uploadProfile = multer({
   storage: profileStorage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB max
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: imageFilter
 });
 
-// ✅ Admission Upload (Multiple Documents)
 const uploadAdmission = multer({
   storage: admissionStorage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB max per file
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: admissionFilter
 });
 
-// ==================== ADMISSION FIELDS CONFIG ====================
+// ==================== ADMISSION FIELDS ====================
 const admissionFields = uploadAdmission.fields([
   { name: 'studentPhoto', maxCount: 1 },
   { name: 'aadhaarCard', maxCount: 1 },
@@ -104,8 +106,7 @@ const admissionFields = uploadAdmission.fields([
   { name: 'marksheet', maxCount: 1 }
 ]);
 
-// ==================== WRAPPER FOR BACKWARD COMPATIBILITY ====================
-// ✅ This makes upload.single() work as before
+// ==================== WRAPPER ====================
 const upload = {
   single: (fieldName) => uploadProfile.single(fieldName),
   array: (fieldName, maxCount) => uploadProfile.array(fieldName, maxCount),

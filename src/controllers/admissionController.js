@@ -359,8 +359,7 @@ exports.approveAdmission = async (req, res) => {
       username,
       password,
       role: 'student',
-      name: admission.studentName,
-      email: null,  // No email
+      name: admission.studentName,  // No email
       phone: admission.mobile,
       isActive: true,
       admissionSource: 'online',

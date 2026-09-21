@@ -102,7 +102,7 @@ app.use('/api', limiter);
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://scholl-frontend-new.vercel.app/'
+    'https://scholl-frontend-new.vercel.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

@@ -106,7 +106,30 @@ const getSubjectsForClass = (cls, teacherSubjects) => {
 // ======================================================
 // DASHBOARD
 // ======================================================
+exports.getTeacherProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    const teacher = await Teacher.findOne({ user: req.user.id });
 
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...user.toObject(),
+        qualification: teacher?.qualification || '',
+        specialization: teacher?.specialization || '',
+        employeeId: teacher?.employeeId || '',
+        experience: teacher?.experience || 0
+      }
+    });
+  } catch (error) {
+    console.error('Get teacher profile error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 exports.getTeacherDashboard = async (req, res) => {
   try {
     const teacher = await Teacher.findOne({

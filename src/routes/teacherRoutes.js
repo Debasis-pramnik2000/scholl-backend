@@ -37,8 +37,10 @@ const {
   getTeacherTimetable,
 
   // Students
-  getTeacherStudents
+  getTeacherStudents,
+  getTeacherProfile
 } = require('../controllers/teacherController');
+router.get('/profile', getTeacherProfile);
 
 // All routes require authentication and teacher role
 router.use(protect);

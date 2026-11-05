@@ -1869,7 +1869,7 @@ exports.publishResult = async (req, res) => {
     }
 
     const deadline = new Date();
-    deadline.setDate(deadline.getDate() + 7);
+    deadline.setDate(deadline.getDate() + 30);
 
     exam.published = true;
     exam.publishedBy = req.user.id;

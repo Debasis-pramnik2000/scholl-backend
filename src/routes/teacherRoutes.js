@@ -4,37 +4,38 @@ const { protect, authorize } = require('../middleware/auth');
 const {
   // Dashboard
   getTeacherDashboard,
-  
+
   // Class Management
   getAssignedClasses,
   getClassStudents,
-  
+
   // Attendance
   markStudentAttendance,
   getClassAttendance,
   getAttendanceReport,
-  
+
   // Marks/Grades
   enterMarks,
   getClassMarks,
   updateMarks,
   getStudentMarks,
-  
+  getResultsByClass,
+
   // Study Materials
   uploadStudyMaterial,
   getStudyMaterials,
   deleteStudyMaterial,
-  
+
   // Profile
   updateTeacherProfile,
   changeTeacherPassword,
-  
+
   // Notices
   getTeacherNotices,
-  
+
   // Timetable
   getTeacherTimetable,
-  
+
   // Students
   getTeacherStudents
 } = require('../controllers/teacherController');
@@ -60,6 +61,8 @@ router.post('/marks', enterMarks);
 router.get('/marks/:classId', getClassMarks);
 router.put('/marks/:markId', updateMarks);
 router.get('/marks/student/:studentId', getStudentMarks);
+router.get('/results', getResultsByClass);
+router.put('/results/:id', updateMarks);
 
 // ==================== STUDY MATERIALS ====================
 router.post('/materials', uploadStudyMaterial);

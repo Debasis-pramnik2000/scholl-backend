@@ -1,19 +1,11 @@
 const express = require('express');
-
 const mongoose = require('mongoose');
-
 const cors = require('cors');
-
 const dotenv = require('dotenv');
-
 const helmet = require('helmet');
-
 const xss = require('xss-clean');
-
 const rateLimit = require('express-rate-limit');
-
 const path = require('path');
-
 const fs = require('fs');
 
 // Load env vars
@@ -21,29 +13,17 @@ dotenv.config();
 
 // Route files
 const authRoutes = require('./src/routes/authRoutes');
-
 const studentRoutes = require('./src/routes/studentRoutes');
-
 const teacherRoutes = require('./src/routes/teacherRoutes');
-
 const adminRoutes = require('./src/routes/adminRoutes');
-
 const subjectRoutes = require('./src/routes/subjectRoutes');
-
 const classRoutes = require('./src/routes/classRoutes');
-
 const timetableRoutes = require('./src/routes/timetableRoutes');
-
 const reportRoutes = require('./src/routes/reportRoutes');
-
 const parentRoutes = require('./src/routes/parentRoutes');
-
 const leaveRoutes = require('./src/routes/leaveRoutes');
-
 const publicRoutes = require('./src/routes/publicRoutes');
-
 const admissionPublicRoutes = require('./src/routes/admissionPublicRoutes');
-
 const admissionAdminRoutes = require('./src/routes/admissionAdminRoutes');
 
 const app = express();
@@ -64,7 +44,6 @@ app.use(helmet({
 const uploadsPath = path.join(__dirname, 'uploads');
 
 console.log('📁 Uploads path:', uploadsPath);
-
 console.log('📁 Uploads exists:', fs.existsSync(uploadsPath));
 
 app.use('/uploads', express.static(uploadsPath, {
@@ -78,7 +57,6 @@ app.use('/uploads', express.static(uploadsPath, {
 // ==================== 3. BODY PARSER ====================
 
 app.use(express.json({ limit: '10mb' }));
-
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ==================== 4. XSS ====================
@@ -102,10 +80,11 @@ app.use('/api', limiter);
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://mansinghabarh-mvh.vercel.app'  
+    'https://mansinghabarh-mvh.vercel.app'
   ],
   credentials: true
 }));
+
 // ==================== 7. MODELS ====================
 
 const User = require('./src/models/User.js');
@@ -126,9 +105,7 @@ app.use('/api/admin/admissions', admissionAdminRoutes);
 
 // ✅ Timetable routes
 app.use('/api/admin/timetable', timetableRoutes);
-
 app.use('/api/teacher/timetable', timetableRoutes);
-
 app.use('/api/student/timetable', timetableRoutes);
 
 // ✅ Public admission routes
@@ -136,23 +113,14 @@ app.use('/api/admission', admissionPublicRoutes);
 
 // ✅ General routes
 app.use('/api/auth', authRoutes);
-
 app.use('/api/student', studentRoutes);
-
 app.use('/api/student', reportRoutes);
-
 app.use('/api/teacher', teacherRoutes);
-
 app.use('/api/admin', adminRoutes);
-
 app.use('/api/subjects', subjectRoutes);
-
 app.use('/api/classes', classRoutes);
-
 app.use('/api/parent', parentRoutes);
-
 app.use('/api/leave', leaveRoutes);
-
 app.use('/api/public', publicRoutes);
 
 // ==================== ROOT ROUTE ====================
@@ -166,11 +134,10 @@ app.get('/', (req, res) => {
 
 // ==================== 10. TEST ROUTES (DEBUG) ====================
 
-// ✅ Test uploads folder
 app.get('/test-uploads', (req, res) => {
   const admissionsDir = path.join(__dirname, 'uploads', 'admissions');
-
   const profilesDir = path.join(__dirname, 'uploads', 'profiles');
+  const materialsDir = path.join(__dirname, 'uploads', 'materials');
 
   res.json({
     uploadsPath,
@@ -179,12 +146,11 @@ app.get('/test-uploads', (req, res) => {
     admissionsExists: fs.existsSync(admissionsDir),
     profilesPath: profilesDir,
     profilesExists: fs.existsSync(profilesDir),
-    admissionFiles: fs.existsSync(admissionsDir)
-      ? fs.readdirSync(admissionsDir)
-      : [],
-    profileFiles: fs.existsSync(profilesDir)
-      ? fs.readdirSync(profilesDir)
-      : []
+    materialsPath: materialsDir,
+    materialsExists: fs.existsSync(materialsDir),
+    admissionFiles: fs.existsSync(admissionsDir) ? fs.readdirSync(admissionsDir) : [],
+    profileFiles: fs.existsSync(profilesDir) ? fs.readdirSync(profilesDir) : [],
+    materialFiles: fs.existsSync(materialsDir) ? fs.readdirSync(materialsDir) : []
   });
 });
 
@@ -202,7 +168,6 @@ app.get('/api/health', (req, res) => {
 
 app.use((req, res) => {
   console.log('❌ 404:', req.originalUrl);
-
   res.status(404).json({
     success: false,
     message: `Route ${req.originalUrl} not found`
@@ -213,7 +178,6 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err.stack);
-
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Something went wrong!',
@@ -238,7 +202,6 @@ const createDefaultAdmin = async () => {
         email: 'admin@school.com',
         isActive: true
       });
-
       console.log('✅ Default admin created successfully');
     } else {
       console.log('✅ Admin user already exists');

@@ -1321,3 +1321,56 @@ exports.getTeacherStudents = async (req, res) => {
     });
   }
 };
+exports.uploadStudyMaterial = async (req, res) => {
+  try {
+    const { title, description, subject, class: className, section } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File is required' });
+    }
+
+    const classData = await Class.findOne({
+      className,
+      section,
+      classTeacher: req.user.id
+    });
+
+    if (!classData) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to upload materials for this class'
+      });
+    }
+
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/materials/${req.file.filename}`;
+
+    const rawExt = req.file.originalname.split('.').pop().toLowerCase();
+    const allowedTypes = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'png', 'mp4'];
+    const fileType = allowedTypes.includes(rawExt) ? rawExt : 'other';
+
+    const material = await StudyMaterial.create({
+      title,
+      description,
+      subject,
+      class: className,
+      section,
+      uploadedBy: req.user.id,
+      fileUrl,
+      fileType,
+      fileSize: req.file.size,
+      isActive: true
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Study material uploaded successfully',
+      data: material
+    });
+  } catch (error) {
+    console.error('Upload study material error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
+    });
+  }
+};

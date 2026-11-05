@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
+const upload = require('../middleware/upload');
+
 const {
   // Dashboard
   getTeacherDashboard,
@@ -40,7 +42,7 @@ const {
   // Students
   getTeacherStudents
 } = require('../controllers/teacherController');
-
+router.post('/materials', upload.single('file'), uploadStudyMaterial);
 // All routes require authentication and teacher role
 router.use(protect);
 router.use(authorize('teacher'));

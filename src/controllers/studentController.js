@@ -57,11 +57,10 @@ exports.getDashboard = async (req, res) => {
 
     // Get upcoming exams
     const exams = await Result.find({
-      student: student._id,
-      published: false
-    })
-    .sort({ examDate: 1 })
-    .limit(5);
+  class: student.class,
+  section: student.section,
+  published: false
+})
 
     res.status(200).json({
       success: true,
@@ -339,7 +338,8 @@ exports.getExamSchedule = async (req, res) => {
     }
 
     const exams = await Result.find({
-      student: student._id,
+      class: student.class,
+      section: student.section,
       published: false
     }).sort({ examDate: 1 });
 

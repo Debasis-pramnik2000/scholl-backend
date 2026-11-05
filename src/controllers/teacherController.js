@@ -104,8 +104,9 @@ const getSubjectsForClass = (cls, teacherSubjects) => {
 };
 
 // ======================================================
-// DASHBOARD
+// PROFILE
 // ======================================================
+
 exports.getTeacherProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -130,6 +131,11 @@ exports.getTeacherProfile = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// ======================================================
+// DASHBOARD
+// ======================================================
+
 exports.getTeacherDashboard = async (req, res) => {
   try {
     const teacher = await Teacher.findOne({
@@ -966,21 +972,21 @@ exports.getStudentMarks = async (req, res) => {
 
 exports.uploadStudyMaterial = async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      subject,
-      class: className,
-      section,
-      fileUrl,
-      fileType,
-      fileSize
-    } = req.body;
+    const { title, description, subject, class: className, section } = req.body;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File is required' });
+    }
 
     const classData = await Class.findOne({
       className,
       section,
-      classTeacher: req.user.id
+      classTeacher: userId
     });
 
     if (!classData) {
@@ -990,16 +996,22 @@ exports.uploadStudyMaterial = async (req, res) => {
       });
     }
 
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/materials/${req.file.filename}`;
+
+    const rawExt = req.file.originalname.split('.').pop().toLowerCase();
+    const allowedTypes = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'png', 'mp4'];
+    const fileType = allowedTypes.includes(rawExt) ? rawExt : 'other';
+
     const material = await StudyMaterial.create({
       title,
       description,
       subject,
       class: className,
       section,
-      uploadedBy: req.user.id,
+      uploadedBy: userId,
       fileUrl,
       fileType,
-      fileSize,
+      fileSize: req.file.size,
       isActive: true
     });
 
@@ -1074,7 +1086,7 @@ exports.deleteStudyMaterial = async (req, res) => {
 };
 
 // ======================================================
-// PROFILE
+// PROFILE UPDATE
 // ======================================================
 
 exports.updateTeacherProfile = async (req, res) => {
@@ -1316,59 +1328,6 @@ exports.getTeacherStudents = async (req, res) => {
   } catch (error) {
     console.error('Get teacher students error:', error);
     res.status(500).json({
-      success: false,
-      message: error.message || 'Server error'
-    });
-  }
-};
-exports.uploadStudyMaterial = async (req, res) => {
-  try {
-    const { title, description, subject, class: className, section } = req.body;
-
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'File is required' });
-    }
-
-    const classData = await Class.findOne({
-      className,
-      section,
-      classTeacher: req.user.id
-    });
-
-    if (!classData) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to upload materials for this class'
-      });
-    }
-
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/materials/${req.file.filename}`;
-
-    const rawExt = req.file.originalname.split('.').pop().toLowerCase();
-    const allowedTypes = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'png', 'mp4'];
-    const fileType = allowedTypes.includes(rawExt) ? rawExt : 'other';
-
-    const material = await StudyMaterial.create({
-      title,
-      description,
-      subject,
-      class: className,
-      section,
-      uploadedBy: req.user.id,
-      fileUrl,
-      fileType,
-      fileSize: req.file.size,
-      isActive: true
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: 'Study material uploaded successfully',
-      data: material
-    });
-  } catch (error) {
-    console.error('Upload study material error:', error);
-    return res.status(500).json({
       success: false,
       message: error.message || 'Server error'
     });

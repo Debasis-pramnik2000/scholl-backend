@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
-const upload = require('../middleware/upload');
+const { uploadMaterial } = require('../middleware/upload');
 
 const {
   // Dashboard
@@ -42,7 +42,7 @@ const {
   // Students
   getTeacherStudents
 } = require('../controllers/teacherController');
-router.post('/materials', upload.single('file'), uploadStudyMaterial);
+
 // All routes require authentication and teacher role
 router.use(protect);
 router.use(authorize('teacher'));
@@ -68,7 +68,7 @@ router.get('/results', getResultsByClass);
 router.put('/results/:id', updateMarks);
 
 // ==================== STUDY MATERIALS ====================
-router.post('/materials', uploadStudyMaterial);
+router.post('/materials', uploadMaterial.single('file'), uploadStudyMaterial);
 router.get('/materials', getStudyMaterials);
 router.delete('/materials/:id', deleteStudyMaterial);
 

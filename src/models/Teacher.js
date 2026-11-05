@@ -93,16 +93,12 @@ const teacherSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// ✅ FIX for Mongoose 9: pre-save hooks no longer receive a `next` callback.
-// Just perform the work directly; no next() call needed for sync logic.
 teacherSchema.pre('save', function() {
   if (this.employeeId) {
     this.employeeId = this.employeeId.toUpperCase();
   }
 });
 
-// Only one set of indexes — unique:true above already indexes employeeId & user,
-// these add the extra ones that aren't already unique.
 teacherSchema.index({ department: 1 });
 teacherSchema.index({ isActive: 1 });
 

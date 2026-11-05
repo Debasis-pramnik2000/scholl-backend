@@ -27,6 +27,7 @@ const {
   deleteStudyMaterial,
 
   // Profile
+  getTeacherProfile,
   updateTeacherProfile,
   changeTeacherPassword,
 
@@ -37,10 +38,8 @@ const {
   getTeacherTimetable,
 
   // Students
-  getTeacherStudents,
-  getTeacherProfile
+  getTeacherStudents
 } = require('../controllers/teacherController');
-router.get('/profile', getTeacherProfile);
 
 // All routes require authentication and teacher role
 router.use(protect);
@@ -72,6 +71,7 @@ router.get('/materials', getStudyMaterials);
 router.delete('/materials/:id', deleteStudyMaterial);
 
 // ==================== PROFILE ====================
+router.get('/profile', getTeacherProfile);
 router.put('/profile', updateTeacherProfile);
 router.put('/change-password', changeTeacherPassword);
 

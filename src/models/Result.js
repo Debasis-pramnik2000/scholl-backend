@@ -4,7 +4,7 @@ const resultSchema = new mongoose.Schema({
   student: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Student',
-    required: true
+    required: false
   },
   class: {
     type: String,
@@ -42,7 +42,8 @@ const resultSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  publishedDate: Date
+  publishedDate: Date,
+  editDeadline: Date
 }, {
   timestamps: true
 });

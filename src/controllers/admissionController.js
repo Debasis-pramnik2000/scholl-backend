@@ -1,3 +1,4 @@
+
 const Admission = require('../models/Admission');
 const User = require('../models/User');
 const Student = require('../models/Student');
@@ -5,13 +6,68 @@ const Class = require('../models/Class');
 const fs = require('fs');
 const path = require('path');
 
-// ==================== PUBLIC ROUTES ====================
+// ============================================================
+// HELPER: DELETE UPLOADED FILES
+// ============================================================
 
-// @desc    Submit admission application
-// @route   POST /api/admission/apply
-// @access  Public
+const deleteUploadedFiles = (files) => {
+  if (!files) return;
+
+  Object.values(files).forEach(fileArray => {
+    if (!Array.isArray(fileArray)) return;
+
+    fileArray.forEach(file => {
+      if (file?.path && fs.existsSync(file.path)) {
+        try {
+          fs.unlinkSync(file.path);
+        } catch (error) {
+          console.error('File cleanup error:', error.message);
+        }
+      }
+    });
+  });
+};
+
+
+// ============================================================
+// HELPER: HANDLE DUPLICATE KEY ERROR
+// ============================================================
+
+const handleDuplicateError = (error, res) => {
+  if (error.code === 11000) {
+    const field = Object.keys(error.keyPattern || error.keyValue || {})[0];
+
+    let message = 'Duplicate record already exists';
+
+    if (field === 'applicationNumber') {
+      message = 'Application number already exists. Please try again.';
+    } else if (field === 'aadhaarNumber') {
+      message = 'An application already exists with this Aadhaar number.';
+    } else if (field === 'mobile') {
+      message = 'An application already exists with this mobile number.';
+    }
+
+    return res.status(400).json({
+      success: false,
+      message
+    });
+  }
+
+  return null;
+};
+
+
+// ============================================================
+// PUBLIC ROUTES
+// ============================================================
+
+// @desc Submit admission application
+// @route POST /api/admission/apply
+// @access Public
+
 exports.submitApplication = async (req, res) => {
   try {
+
     const {
       studentName,
       fatherName,
@@ -32,17 +88,28 @@ exports.submitApplication = async (req, res) => {
       yearOfPassing
     } = req.body;
 
-    // ✅ Validate required fields
-    if (!studentName || !fatherName || !dateOfBirth || !gender || 
-        !mobile || !aadhaarNumber || !applyingForClass) {
+    // Validate required fields
+
+    if (
+      !studentName ||
+      !fatherName ||
+      !dateOfBirth ||
+      !gender ||
+      !mobile ||
+      !aadhaarNumber ||
+      !applyingForClass
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Please fill all required fields'
       });
     }
 
-    // ✅ Check duplicate mobile
-    const existingMobile = await Admission.checkDuplicateMobile(mobile);
+    // Check duplicate mobile
+
+    const existingMobile =
+      await Admission.checkDuplicateMobile(mobile);
+
     if (existingMobile) {
       return res.status(400).json({
         success: false,
@@ -50,8 +117,11 @@ exports.submitApplication = async (req, res) => {
       });
     }
 
-    // ✅ Check duplicate Aadhaar
-    const existingAadhaar = await Admission.checkDuplicateAadhaar(aadhaarNumber);
+    // Check duplicate Aadhaar
+
+    const existingAadhaar =
+      await Admission.checkDuplicateAadhaar(aadhaarNumber);
+
     if (existingAadhaar) {
       return res.status(400).json({
         success: false,
@@ -59,8 +129,10 @@ exports.submitApplication = async (req, res) => {
       });
     }
 
-    // ✅ Check if files are uploaded
+    // Uploaded files
+
     const files = req.files || {};
+
     const studentPhoto = files.studentPhoto?.[0];
     const aadhaarCard = files.aadhaarCard?.[0];
     const leavingCertificate = files.leavingCertificate?.[0];
@@ -87,45 +159,75 @@ exports.submitApplication = async (req, res) => {
       });
     }
 
-    // ✅ Parse address if string
+    // Parse address
+
     let addressObj = address;
+
     if (typeof address === 'string') {
       try {
         addressObj = JSON.parse(address);
-      } catch (e) {
+      } catch (error) {
         addressObj = { street: address };
       }
     }
 
-    // ✅ Create admission application
+    if (!addressObj || typeof addressObj !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid address is required'
+      });
+    }
+
+    // Create admission
+    // Application Number is generated automatically by admission.js
+
     const admission = await Admission.create({
+
       studentName,
       fatherName,
       motherName: motherName || '',
+
       dateOfBirth,
-      age: parseInt(age),
+      age: parseInt(age, 10),
       gender,
+
       mobile,
       alternateMobile: alternateMobile || '',
+
       aadhaarNumber,
       address: addressObj,
+
       applyingForClass,
       section: section || 'A',
+
       lastQualification,
       previousSchool,
       lastClassPassed,
+
       percentage: parseFloat(percentage),
       yearOfPassing,
-      studentPhoto: `/uploads/admissions/${studentPhoto.filename}`,
-      aadhaarCard: `/uploads/admissions/${aadhaarCard.filename}`,
-      leavingCertificate: `/uploads/admissions/${leavingCertificate.filename}`,
-      marksheet: marksheet ? `/uploads/admissions/${marksheet.filename}` : null,
+
+      studentPhoto:
+        `/uploads/admissions/${studentPhoto.filename}`,
+
+      aadhaarCard:
+        `/uploads/admissions/${aadhaarCard.filename}`,
+
+      leavingCertificate:
+        `/uploads/admissions/${leavingCertificate.filename}`,
+
+      marksheet: marksheet
+        ? `/uploads/admissions/${marksheet.filename}`
+        : null,
+
       status: 'Pending'
+
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Application submitted successfully!',
+
       data: {
         applicationNumber: admission.applicationNumber,
         studentName: admission.studentName,
@@ -133,52 +235,56 @@ exports.submitApplication = async (req, res) => {
         submittedAt: admission.createdAt
       }
     });
+
   } catch (error) {
+
     console.error('Submit application error:', error);
 
-    // ✅ Delete uploaded files if error
-    if (req.files) {
-      Object.values(req.files).forEach(fileArray => {
-        fileArray.forEach(file => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
-      });
-    }
+    // Delete uploaded files after failed submission
 
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      return res.status(400).json({
-        success: false,
-        message: `${field} already exists`
-      });
-    }
+    deleteUploadedFiles(req.files);
+
+    const duplicateResponse = handleDuplicateError(error, res);
+
+    if (duplicateResponse) return duplicateResponse;
 
     if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
+
+      const messages = Object.values(error.errors)
+        .map(err => err.message);
+
       return res.status(400).json({
         success: false,
         message: messages.join('. ')
       });
+
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Server error'
     });
+
   }
 };
 
-// @desc    Check application status
-// @route   GET /api/admission/status/:applicationNumber
-// @access  Public
+
+// ============================================================
+// CHECK APPLICATION STATUS
+// ============================================================
+
+// @route GET /api/admission/status/:applicationNumber
+
 exports.checkStatus = async (req, res) => {
   try {
+
     const { applicationNumber } = req.params;
 
-    const admission = await Admission.findOne({ applicationNumber })
-      .select('applicationNumber studentName applyingForClass status remarks createdAt reviewedAt smsSent');
+    const admission = await Admission.findOne({
+      applicationNumber
+    }).select(
+      'applicationNumber studentName applyingForClass status remarks createdAt reviewedAt smsSent'
+    );
 
     if (!admission) {
       return res.status(404).json({
@@ -187,26 +293,31 @@ exports.checkStatus = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: admission
     });
+
   } catch (error) {
+
     console.error('Check status error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };
 
-// ==================== ADMIN ROUTES ====================
 
-// @desc    Get all admissions with filters
-// @route   GET /api/admin/admissions
-// @access  Private (Admin only)
+// ============================================================
+// ADMIN: GET ALL ADMISSIONS
+// ============================================================
+
 exports.getAllAdmissions = async (req, res) => {
   try {
+
     const {
       status,
       class: className,
@@ -217,12 +328,19 @@ exports.getAllAdmissions = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    let query = {};
+    const currentPage = Math.max(1, parseInt(page, 10) || 1);
+    const pageLimit = Math.max(1, parseInt(limit, 10) || 10);
+
+    const query = {};
 
     if (status) query.status = status;
-    if (className) query.applyingForClass = className;
+
+    if (className) {
+      query.applyingForClass = className;
+    }
 
     if (search) {
+
       query.$or = [
         { applicationNumber: { $regex: search, $options: 'i' } },
         { studentName: { $regex: search, $options: 'i' } },
@@ -230,46 +348,69 @@ exports.getAllAdmissions = async (req, res) => {
         { aadhaarNumber: { $regex: search, $options: 'i' } },
         { fatherName: { $regex: search, $options: 'i' } }
       ];
+
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (currentPage - 1) * pageLimit;
+
+    const allowedSortFields = [
+      'createdAt',
+      'studentName',
+      'applicationNumber',
+      'status'
+    ];
+
+    const safeSortBy = allowedSortFields.includes(sortBy)
+      ? sortBy
+      : 'createdAt';
+
     const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    sort[safeSortBy] = sortOrder === 'desc' ? -1 : 1;
 
     const admissions = await Admission.find(query)
       .populate('reviewedBy', 'name')
       .sort(sort)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(pageLimit);
 
     const total = await Admission.countDocuments(query);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
+
       data: {
         admissions,
+
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: currentPage,
+          limit: pageLimit,
           total,
-          pages: Math.ceil(total / parseInt(limit))
+          pages: Math.ceil(total / pageLimit)
         }
       }
     });
+
   } catch (error) {
+
     console.error('Get all admissions error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };
 
-// @desc    Get single admission by ID
-// @route   GET /api/admin/admissions/:id
-// @access  Private (Admin only)
+
+// ============================================================
+// ADMIN: GET SINGLE ADMISSION
+// ============================================================
+
 exports.getAdmissionById = async (req, res) => {
   try {
+
     const admission = await Admission.findById(req.params.id)
       .populate('reviewedBy', 'name')
       .populate('studentId', 'rollNumber class section');
@@ -281,28 +422,194 @@ exports.getAdmissionById = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: admission
     });
+
   } catch (error) {
+
     console.error('Get admission error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };
 
-// @desc    Approve admission & Auto-create student
-// @route   PUT /api/admin/admissions/:id/approve
-// @access  Private (Admin only)
+
+// ============================================================
+// HELPER: GENERATE USERNAME
+// ============================================================
+
+const generateUsername = async (studentName) => {
+
+  const cleanName = studentName
+    .toLowerCase()
+    .replace(/\s+/g, '.')
+    .replace(/[^a-z.]/g, '');
+
+  const year = new Date().getFullYear();
+
+  const baseUsername = `${cleanName || 'student'}.${year}`;
+
+  let username = baseUsername;
+  let counter = 1;
+
+  while (await User.exists({ username })) {
+    username = `${baseUsername}.${counter}`;
+    counter++;
+  }
+
+  return username;
+};
+
+
+// ============================================================
+// HELPER: GENERATE ROLL NUMBER
+// ============================================================
+
+const generateRollNumber = async (className, year) => {
+
+  const classNumber = className.replace('Class ', '');
+
+  const rollPrefix = `${classNumber}${year}`;
+
+  const lastStudent = await Student.findOne({
+    rollNumber: {
+      $regex: `^${rollPrefix}`
+    }
+  }).sort({ rollNumber: -1 });
+
+  let rollNumber;
+
+  if (lastStudent) {
+
+    const lastNumber = parseInt(
+      lastStudent.rollNumber.replace(rollPrefix, ''),
+      10
+    );
+
+    rollNumber =
+      `${rollPrefix}${String(lastNumber + 1).padStart(3, '0')}`;
+
+  } else {
+
+    rollNumber = `${rollPrefix}001`;
+
+  }
+
+  return rollNumber;
+};
+
+
+// ============================================================
+// HELPER: CREATE STUDENT FROM ADMISSION
+// ============================================================
+
+const createStudentFromAdmission = async (
+  admission,
+  section
+) => {
+
+  const year = new Date().getFullYear();
+
+  const username = await generateUsername(admission.studentName);
+
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+
+  const password =
+    `${admission.studentName.split(' ')[0]}@${randomNum}`;
+
+  const rollNumber = await generateRollNumber(
+    admission.applyingForClass,
+    year
+  );
+
+  // Create User
+
+  const user = await User.create({
+
+    username,
+    password,
+
+    role: 'student',
+
+    name: admission.studentName,
+    phone: admission.mobile,
+
+    isActive: true,
+
+    admissionSource: 'online',
+    admissionId: admission._id
+
+  });
+
+  // Create Student
+
+  const student = await Student.create({
+
+    user: user._id,
+
+    rollNumber,
+
+    class: admission.applyingForClass.replace('Class ', ''),
+
+    section: section || admission.section || 'A',
+
+    academicYear: `${year}-${year + 1}`,
+
+    parentName: admission.fatherName,
+    parentPhone: admission.mobile,
+
+    address: admission.address?.street || '',
+
+    dateOfBirth: admission.dateOfBirth,
+    gender: admission.gender,
+
+    studentPhoto: admission.studentPhoto,
+    aadhaarNumber: admission.aadhaarNumber
+
+  });
+
+  // Update Class count
+
+  await Class.findOneAndUpdate(
+    {
+      className: admission.applyingForClass.replace('Class ', ''),
+      section: section || admission.section || 'A'
+    },
+    {
+      $inc: { totalStudents: 1 }
+    }
+  );
+
+  return {
+    user,
+    student,
+    username,
+    password,
+    rollNumber
+  };
+
+};
+
+
+// ============================================================
+// ADMIN: APPROVE ADMISSION
+// ============================================================
+
+// @route PUT /api/admin/admissions/:id/approve
+
 exports.approveAdmission = async (req, res) => {
   try {
-    const { remarks, section } = req.body;
-    const admissionId = req.params.id;
 
-    const admission = await Admission.findById(admissionId);
+    const { remarks, section } = req.body;
+
+    const admission = await Admission.findById(req.params.id);
+
     if (!admission) {
       return res.status(404).json({
         success: false,
@@ -317,129 +624,105 @@ exports.approveAdmission = async (req, res) => {
       });
     }
 
-    // ✅ Generate Username
-    const cleanName = admission.studentName
-      .toLowerCase()
-      .replace(/\s+/g, '.')
-      .replace(/[^a-z.]/g, '');
-    const year = new Date().getFullYear();
-    let username = `${cleanName}.${year}`;
+    // Create student and user
 
-    // Check if username exists
-    let userExists = await User.findOne({ username });
-    let counter = 1;
-    while (userExists) {
-      username = `${cleanName}.${year}.${counter}`;
-      userExists = await User.findOne({ username });
-      counter++;
-    }
-
-    // ✅ Generate Password
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const password = `${admission.studentName.split(' ')[0]}@${randomNum}`;
-
-    // ✅ Generate Roll Number
-    const classNumber = admission.applyingForClass.replace('Class ', '');
-    const rollPrefix = `${classNumber}${year}`;
-    
-    const lastStudent = await Student.findOne({
-      rollNumber: { $regex: `^${rollPrefix}` }
-    }).sort({ rollNumber: -1 });
-
-    let rollNumber;
-    if (lastStudent) {
-      const lastNumber = parseInt(lastStudent.rollNumber.replace(rollPrefix, ''));
-      rollNumber = `${rollPrefix}${String(lastNumber + 1).padStart(3, '0')}`;
-    } else {
-      rollNumber = `${rollPrefix}001`;
-    }
-
-    // ✅ Create User Account
-    const user = await User.create({
-      username,
-      password,
-      role: 'student',
-      name: admission.studentName,  // No email
-      phone: admission.mobile,
-      isActive: true,
-      admissionSource: 'online',
-      admissionId: admission._id
-    });
-
-    // ✅ Create Student Profile
-    const student = await Student.create({
-      user: user._id,
-      rollNumber,
-      class: admission.applyingForClass.replace('Class ', ''),
-      section: section || admission.section || 'A',
-      academicYear: `${year}-${year + 1}`,
-      parentName: admission.fatherName,
-      parentPhone: admission.mobile,
-      address: admission.address?.street || '',
-      dateOfBirth: admission.dateOfBirth,
-      gender: admission.gender,
-      studentPhoto: admission.studentPhoto,
-      aadhaarNumber: admission.aadhaarNumber
-    });
-
-    // ✅ Update Class student count
-    await Class.findOneAndUpdate(
-      { 
-        className: admission.applyingForClass.replace('Class ', ''),
-        section: section || admission.section || 'A'
-      },
-      { $inc: { totalStudents: 1 } }
+    const result = await createStudentFromAdmission(
+      admission,
+      section
     );
 
-    // ✅ Update Admission status
+    const {
+      student,
+      username,
+      password,
+      rollNumber
+    } = result;
+
+    // Update admission
+
     admission.status = 'Approved';
+
     admission.remarks = remarks || 'Approved by admin';
+
     admission.reviewedBy = req.user.id;
     admission.reviewedAt = new Date();
+
     admission.generatedUsername = username;
     admission.generatedPassword = password;
     admission.generatedRollNumber = rollNumber;
+
     admission.studentId = student._id;
-    admission.smsSent = false; // Will be updated when SMS is sent
+
+    admission.smsSent = false;
+
     await admission.save();
 
-    res.status(200).json({
+    return res.status(200).json({
+
       success: true,
+
       message: 'Admission approved & student account created successfully!',
+
       data: {
+
         admission: {
           applicationNumber: admission.applicationNumber,
           status: admission.status
         },
+
         student: {
-          name: student.user ? admission.studentName : admission.studentName,
+          name: admission.studentName,
           rollNumber,
           class: student.class,
           section: student.section
         },
+
         credentials: {
           username,
           password,
           note: 'Please share these credentials with the student'
         }
+
       }
+
     });
+
   } catch (error) {
+
     console.error('Approve admission error:', error);
-    res.status(500).json({
+
+    const duplicateResponse = handleDuplicateError(error, res);
+
+    if (duplicateResponse) return duplicateResponse;
+
+    return res.status(500).json({
       success: false,
       message: error.message || 'Server error'
     });
+
   }
 };
 
-// @desc    Reject admission
-// @route   PUT /api/admin/admissions/:id/reject
-// @access  Private (Admin only)
+
+// ============================================================
+// ADMIN: REJECT ADMISSION
+// ============================================================
+
+// @route PUT /api/admin/admissions/:id/reject
+
 exports.rejectAdmission = async (req, res) => {
   try {
+
     const { remarks } = req.body;
-    const admissionId = req.params.id;
+
+    const admission = await Admission.findById(req.params.id);
+
+    if (!admission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admission not found'
+      });
+    }
 
     if (!remarks || remarks.trim() === '') {
       return res.status(400).json({
@@ -448,44 +731,53 @@ exports.rejectAdmission = async (req, res) => {
       });
     }
 
-    const admission = await Admission.findById(admissionId);
-    if (!admission) {
-      return res.status(404).json({
-        success: false,
-        message: 'Admission not found'
-      });
-    }
-
     admission.status = 'Rejected';
+
     admission.remarks = remarks;
+
     admission.reviewedBy = req.user.id;
     admission.reviewedAt = new Date();
+
     await admission.save();
 
-    res.status(200).json({
+    return res.status(200).json({
+
       success: true,
+
       message: 'Admission rejected successfully',
+
       data: {
         applicationNumber: admission.applicationNumber,
         status: admission.status,
         remarks: admission.remarks
       }
+
     });
+
   } catch (error) {
+
     console.error('Reject admission error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: error.message || 'Server error'
     });
+
   }
 };
 
-// @desc    Delete admission
-// @route   DELETE /api/admin/admissions/:id
-// @access  Private (Admin only)
+
+// ============================================================
+// ADMIN: DELETE ADMISSION
+// ============================================================
+
+// @route DELETE /api/admin/admissions/:id
+
 exports.deleteAdmission = async (req, res) => {
   try {
+
     const admission = await Admission.findById(req.params.id);
+
     if (!admission) {
       return res.status(404).json({
         success: false,
@@ -493,7 +785,8 @@ exports.deleteAdmission = async (req, res) => {
       });
     }
 
-    // ✅ Delete uploaded documents
+    // Delete uploaded documents
+
     const documents = [
       admission.studentPhoto,
       admission.aadhaarCard,
@@ -502,58 +795,82 @@ exports.deleteAdmission = async (req, res) => {
     ].filter(Boolean);
 
     documents.forEach(docPath => {
-      const fullPath = path.join(__dirname, '..', docPath);
+
+      const fullPath = path.join(
+        __dirname,
+        '..',
+        docPath.replace(/^\/+/, '')
+      );
+
       if (fs.existsSync(fullPath)) {
         try {
           fs.unlinkSync(fullPath);
-        } catch (err) {
-          console.error('Error deleting file:', err);
+        } catch (error) {
+          console.error('Error deleting file:', error.message);
         }
       }
+
     });
 
-    // ✅ If student was created, don't delete it (only delete admission)
+    // Do not delete already-created student account
+
     await Admission.findByIdAndDelete(req.params.id);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Admission deleted successfully'
     });
+
   } catch (error) {
+
     console.error('Delete admission error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };
 
-// @desc    Get admission statistics
-// @route   GET /api/admin/admissions/stats
-// @access  Private (Admin only)
+
+// ============================================================
+// ADMIN: ADMISSION STATISTICS
+// ============================================================
+
 exports.getAdmissionStats = async (req, res) => {
   try {
+
     const stats = await Admission.getStatistics();
 
-    // ✅ Get class-wise breakdown
+    // Class-wise breakdown
+
     const classWise = await Admission.aggregate([
-      { $match: { status: 'Approved' } },
+      {
+        $match: { status: 'Approved' }
+      },
       {
         $group: {
           _id: '$applyingForClass',
           count: { $sum: 1 }
         }
       },
-      { $sort: { _id: 1 } }
+      {
+        $sort: { _id: 1 }
+      }
     ]);
 
-    // ✅ Get recent admissions
+    // Recent admissions
+
     const recent = await Admission.find()
       .sort({ createdAt: -1 })
       .limit(5)
-      .select('applicationNumber studentName applyingForClass status createdAt');
+      .select(
+        'applicationNumber studentName applyingForClass status createdAt'
+      );
 
-    // ✅ Get monthly breakdown
+    // Monthly breakdown
+
     const monthly = await Admission.aggregate([
       {
         $group: {
@@ -564,36 +881,59 @@ exports.getAdmissionStats = async (req, res) => {
           count: { $sum: 1 }
         }
       },
-      { $sort: { '_id.year': -1, '_id.month': -1 } },
-      { $limit: 6 }
+      {
+        $sort: {
+          '_id.year': -1,
+          '_id.month': -1
+        }
+      },
+      {
+        $limit: 6
+      }
     ]);
 
-    res.status(200).json({
+    return res.status(200).json({
+
       success: true,
+
       data: {
         stats,
         classWise,
         recent,
         monthly
       }
+
     });
+
   } catch (error) {
+
     console.error('Get admission stats error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };
 
-// @desc    Bulk approve admissions
-// @route   POST /api/admin/admissions/bulk-approve
-// @access  Private (Admin only)
+
+// ============================================================
+// ADMIN: BULK APPROVE ADMISSIONS
+// ============================================================
+
+// @route POST /api/admin/admissions/bulk-approve
+
 exports.bulkApproveAdmissions = async (req, res) => {
   try {
+
     const { admissionIds } = req.body;
 
-    if (!admissionIds || !Array.isArray(admissionIds) || admissionIds.length === 0) {
+    if (
+      !admissionIds ||
+      !Array.isArray(admissionIds) ||
+      admissionIds.length === 0
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Please select at least one admission'
@@ -606,165 +946,194 @@ exports.bulkApproveAdmissions = async (req, res) => {
     };
 
     for (const admissionId of admissionIds) {
+
       try {
+
         const admission = await Admission.findById(admissionId);
+
         if (!admission || admission.status === 'Approved') {
-          results.failed.push({ id: admissionId, reason: 'Not found or already approved' });
+
+          results.failed.push({
+            id: admissionId,
+            reason: 'Not found or already approved'
+          });
+
           continue;
         }
 
-        // Generate credentials
-        const cleanName = admission.studentName.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z.]/g, '');
-        const year = new Date().getFullYear();
-        let username = `${cleanName}.${year}`;
-
-        let userExists = await User.findOne({ username });
-        let counter = 1;
-        while (userExists) {
-          username = `${cleanName}.${year}.${counter}`;
-          userExists = await User.findOne({ username });
-          counter++;
-        }
-
-        const randomNum = Math.floor(1000 + Math.random() * 9000);
-        const password = `${admission.studentName.split(' ')[0]}@${randomNum}`;
-
-        // Generate Roll Number
-        const classNumber = admission.applyingForClass.replace('Class ', '');
-        const rollPrefix = `${classNumber}${year}`;
-        
-        const lastStudent = await Student.findOne({
-          rollNumber: { $regex: `^${rollPrefix}` }
-        }).sort({ rollNumber: -1 });
-
-        let rollNumber;
-        if (lastStudent) {
-          const lastNumber = parseInt(lastStudent.rollNumber.replace(rollPrefix, ''));
-          rollNumber = `${rollPrefix}${String(lastNumber + 1).padStart(3, '0')}`;
-        } else {
-          rollNumber = `${rollPrefix}001`;
-        }
-
-        // Create User
-        const user = await User.create({
-          username,
-          password,
-          role: 'student',
-          name: admission.studentName,
-          phone: admission.mobile,
-          isActive: true,
-          admissionSource: 'online',
-          admissionId: admission._id
-        });
-
-        // Create Student
-        const student = await Student.create({
-          user: user._id,
-          rollNumber,
-          class: admission.applyingForClass.replace('Class ', ''),
-          section: admission.section || 'A',
-          academicYear: `${year}-${year + 1}`,
-          parentName: admission.fatherName,
-          parentPhone: admission.mobile,
-          address: admission.address?.street || '',
-          dateOfBirth: admission.dateOfBirth,
-          gender: admission.gender
-        });
-
-        // Update Class
-        await Class.findOneAndUpdate(
-          { 
-            className: admission.applyingForClass.replace('Class ', ''),
-            section: admission.section || 'A'
-          },
-          { $inc: { totalStudents: 1 } }
+        const result = await createStudentFromAdmission(
+          admission,
+          admission.section || 'A'
         );
 
-        // Update Admission
-        admission.status = 'Approved';
-        admission.reviewedBy = req.user.id;
-        admission.reviewedAt = new Date();
-        admission.generatedUsername = username;
-        admission.generatedPassword = password;
-        admission.generatedRollNumber = rollNumber;
-        admission.studentId = student._id;
-        await admission.save();
-
-        results.success.push({
-          id: admissionId,
-          applicationNumber: admission.applicationNumber,
+        const {
+          student,
           username,
           password,
           rollNumber
+        } = result;
+
+        // Update admission
+
+        admission.status = 'Approved';
+
+        admission.reviewedBy = req.user.id;
+        admission.reviewedAt = new Date();
+
+        admission.generatedUsername = username;
+        admission.generatedPassword = password;
+        admission.generatedRollNumber = rollNumber;
+
+        admission.studentId = student._id;
+
+        await admission.save();
+
+        results.success.push({
+
+          id: admissionId,
+
+          applicationNumber: admission.applicationNumber,
+
+          username,
+          password,
+          rollNumber
+
         });
-      } catch (err) {
-        results.failed.push({ id: admissionId, reason: err.message });
+
+      } catch (error) {
+
+        console.error(
+          `Bulk approval failed for ${admissionId}:`,
+          error
+        );
+
+        results.failed.push({
+          id: admissionId,
+          reason: error.message
+        });
+
       }
+
     }
 
-    res.status(200).json({
+    return res.status(200).json({
+
       success: true,
-      message: `Bulk approval completed: ${results.success.length} approved, ${results.failed.length} failed`,
+
+      message:
+        `Bulk approval completed: ${results.success.length} approved, ${results.failed.length} failed`,
+
       data: results
+
     });
+
   } catch (error) {
+
     console.error('Bulk approve error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };
 
-// @desc    Export admissions to CSV
-// @route   GET /api/admin/admissions/export
-// @access  Private (Admin only)
+
+// ============================================================
+// ADMIN: EXPORT ADMISSIONS TO CSV
+// ============================================================
+
 exports.exportAdmissions = async (req, res) => {
   try {
+
     const { status } = req.query;
-    
-    let query = {};
-    if (status) query.status = status;
 
-    const admissions = await Admission.find(query).sort({ createdAt: -1 });
+    const query = {};
 
-    // Generate CSV
+    if (status) {
+      query.status = status;
+    }
+
+    const admissions = await Admission.find(query)
+      .sort({ createdAt: -1 });
+
     const headers = [
-      'Application No', 'Student Name', 'Father Name', 'DOB', 'Age', 'Gender',
-      'Mobile', 'Aadhaar', 'Class', 'Section', 'Previous School',
-      'Percentage', 'Status', 'Applied Date'
+      'Application No',
+      'Student Name',
+      'Father Name',
+      'DOB',
+      'Age',
+      'Gender',
+      'Mobile',
+      'Aadhaar',
+      'Class',
+      'Section',
+      'Previous School',
+      'Percentage',
+      'Status',
+      'Applied Date'
     ];
 
+    // Escape CSV values
+
+    const escapeCSV = (value) => {
+      const safeValue = String(value ?? '');
+
+      return `"${safeValue.replace(/"/g, '""')}"`;
+    };
+
     const rows = admissions.map(a => [
+
       a.applicationNumber,
       a.studentName,
       a.fatherName,
+
       new Date(a.dateOfBirth).toLocaleDateString(),
+
       a.age,
       a.gender,
       a.mobile,
       a.aadhaarNumber,
+
       a.applyingForClass,
       a.section,
+
       a.previousSchool,
       a.percentage,
       a.status,
+
       new Date(a.createdAt).toLocaleDateString()
+
     ]);
 
     const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+
+      headers.map(escapeCSV).join(','),
+
+      ...rows.map(row =>
+        row.map(escapeCSV).join(',')
+      )
+
     ].join('\n');
 
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=admissions-${Date.now()}.csv`);
-    res.send(csvContent);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=admissions-${Date.now()}.csv`
+    );
+
+    return res.send('\uFEFF' + csvContent);
+
   } catch (error) {
+
     console.error('Export admissions error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Server error'
     });
+
   }
 };

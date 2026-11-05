@@ -1819,71 +1819,37 @@ exports.getAttendanceReports = async (
 // @desc    Create exam
 // @route   POST /api/admin/exams
 // @access  Private (Admin only)
-exports.createExam = async (
-  req,
-  res
-) => {
+exports.createExam = async (req, res) => {
   try {
     const {
-      student,
       class: className,
       section,
       examName,
       examDate,
-      subjects,
-      totalMarks,
-      percentage,
-      grade,
-      rank,
       academicYear
     } = req.body;
 
-    const studentData =
-      await Student.findById(
-        student
-      );
-
-    if (!studentData) {
-      return res.status(404).json({
-        success: false,
-        message:
-          'Student not found'
-      });
-    }
-
-    const exam =
-      await Result.create({
-        student,
-        class: className,
-        section,
-        examName,
-        examDate,
-        subjects,
-        totalMarks,
-        percentage,
-        grade,
-        rank,
-        academicYear
-      });
+    const exam = await Result.create({
+      class: className,
+      section,
+      examName,
+      examDate,
+      academicYear,
+      subjects: [],
+      published: false
+    });
 
     res.status(201).json({
       success: true,
-      message:
-        'Exam created successfully',
+      message: 'Exam created successfully',
       data: exam
     });
 
   } catch (error) {
-    console.error(
-      'Create exam error:',
-      error
-    );
-
+    console.error('Create exam error:', error);
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -1891,49 +1857,38 @@ exports.createExam = async (
 // @desc    Publish result
 // @route   PUT /api/admin/exams/:id/publish
 // @access  Private (Admin only)
-exports.publishResult = async (
-  req,
-  res
-) => {
+exports.publishResult = async (req, res) => {
   try {
-    const exam =
-      await Result.findById(
-        req.params.id
-      );
+    const exam = await Result.findById(req.params.id);
 
     if (!exam) {
       return res.status(404).json({
         success: false,
-        message:
-          'Exam not found'
+        message: 'Exam not found'
       });
     }
 
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 7);
+
     exam.published = true;
-    exam.publishedBy =
-      req.user.id;
-    exam.publishedDate =
-      new Date();
+    exam.publishedBy = req.user.id;
+    exam.publishedDate = new Date();
+    exam.editDeadline = deadline;
 
     await exam.save();
 
     res.status(200).json({
       success: true,
-      message:
-        'Result published successfully',
+      message: 'Result published successfully',
       data: exam
     });
 
   } catch (error) {
-    console.error(
-      'Publish result error:',
-      error
-    );
-
+    console.error('Publish result error:', error);
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };

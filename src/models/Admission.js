@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 
 const admissionSchema = new mongoose.Schema({
@@ -68,7 +69,6 @@ const admissionSchema = new mongoose.Schema({
   aadhaarNumber: {
     type: String,
     required: [true, 'Aadhaar number is required'],
-    unique: true,
     trim: true,
     match: [/^[0-9]{12}$/, 'Aadhaar must be 12 digits']
   },
@@ -76,7 +76,6 @@ const admissionSchema = new mongoose.Schema({
   // ==================== ADDRESS ====================
 
   address: {
-
     street: {
       type: String,
       required: [true, 'Street address is required'],
@@ -101,7 +100,6 @@ const admissionSchema = new mongoose.Schema({
       trim: true,
       match: [/^[0-9]{6}$/, 'Pincode must be 6 digits']
     }
-
   },
 
   // ==================== CLASS INFORMATION ====================
@@ -266,43 +264,71 @@ admissionSchema.index({ applyingForClass: 1 });
 admissionSchema.index({ createdAt: -1 });
 admissionSchema.index({ status: 1, createdAt: -1 });
 
+// Aadhaar unique only for Pending / Approved applications
+admissionSchema.index(
+  { aadhaarNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: { $in: ['Pending', 'Approved'] }
+    }
+  }
+);
+
 
 // ============================================================
 // PRE-VALIDATE MIDDLEWARE
-// Auto-generate Application Number
+// AUTOMATIC APPLICATION NUMBER GENERATION
 // ============================================================
 
-admissionSchema.pre('validate', async function() {
+admissionSchema.pre('validate', async function () {
 
-  if (!this.applicationNumber) {
+  // Generate only for new admissions
+  if (!this.isNew || this.applicationNumber) {
+    return;
+  }
 
-    try {
+  const year = new Date().getFullYear();
+  const counterId = `admission-${year}`;
 
-      const year = new Date().getFullYear();
+  try {
 
-      // Get count of admissions this year
-      const yearStart = new Date(year, 0, 1);
-      const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+    const db = mongoose.connection.db;
 
-      const count = await mongoose.model('Admission').countDocuments({
-        createdAt: {
-          $gte: yearStart,
-          $lte: yearEnd
-        }
-      });
-
-      const number = String(count + 1).padStart(4, '0');
-
-      this.applicationNumber = `ADM-${year}-${number}`;
-
-    } catch (error) {
-
-      console.error('Error generating application number:', error);
-
-      // Fallback: Use timestamp
-      this.applicationNumber = `ADM-${Date.now()}`;
-
+    if (!db) {
+      throw new Error('MongoDB connection is not ready');
     }
+
+    const result = await db.collection('counters').findOneAndUpdate(
+      { _id: counterId },
+      { $inc: { seq: 1 } },
+      {
+        upsert: true,
+        returnDocument: 'after'
+      }
+    );
+
+    // MongoDB driver v4 and v6 compatibility
+    const counterDoc = result?.value ?? result;
+
+    if (
+      !counterDoc ||
+      typeof counterDoc.seq !== 'number' ||
+      !Number.isFinite(counterDoc.seq)
+    ) {
+      throw new Error('Could not generate application number');
+    }
+
+    this.applicationNumber =
+      `ADM-${year}-${String(counterDoc.seq).padStart(4, '0')}`;
+
+  } catch (error) {
+
+    console.error('Application number generation error:', error);
+
+    throw new Error(
+      'Unable to generate application number. Please try again.'
+    );
 
   }
 
@@ -313,16 +339,11 @@ admissionSchema.pre('validate', async function() {
 // VIRTUAL FIELD: FULL ADDRESS
 // ============================================================
 
-admissionSchema.virtual('fullAddress').get(function() {
+admissionSchema.virtual('fullAddress').get(function () {
 
   if (!this.address) return '';
 
-  const {
-    street,
-    city,
-    state,
-    pincode
-  } = this.address;
+  const { street, city, state, pincode } = this.address;
 
   return `${street}, ${city}, ${state} - ${pincode}`;
 
@@ -333,7 +354,7 @@ admissionSchema.virtual('fullAddress').get(function() {
 // VIRTUAL FIELD: STATUS COLOR
 // ============================================================
 
-admissionSchema.virtual('statusColor').get(function() {
+admissionSchema.virtual('statusColor').get(function () {
 
   const colors = {
     Pending: 'warning',
@@ -351,13 +372,11 @@ admissionSchema.virtual('statusColor').get(function() {
 // STATIC METHOD: CHECK DUPLICATE MOBILE
 // ============================================================
 
-admissionSchema.statics.checkDuplicateMobile = async function(mobile) {
+admissionSchema.statics.checkDuplicateMobile = async function (mobile) {
 
   const existing = await this.findOne({
     mobile: mobile,
-    status: {
-      $in: ['Pending', 'Approved']
-    }
+    status: { $in: ['Pending', 'Approved'] }
   });
 
   return existing;
@@ -369,13 +388,11 @@ admissionSchema.statics.checkDuplicateMobile = async function(mobile) {
 // STATIC METHOD: CHECK DUPLICATE AADHAAR
 // ============================================================
 
-admissionSchema.statics.checkDuplicateAadhaar = async function(aadhaarNumber) {
+admissionSchema.statics.checkDuplicateAadhaar = async function (aadhaarNumber) {
 
   const existing = await this.findOne({
     aadhaarNumber: aadhaarNumber,
-    status: {
-      $in: ['Pending', 'Approved']
-    }
+    status: { $in: ['Pending', 'Approved'] }
   });
 
   return existing;
@@ -387,19 +404,15 @@ admissionSchema.statics.checkDuplicateAadhaar = async function(aadhaarNumber) {
 // STATIC METHOD: GET STATISTICS
 // ============================================================
 
-admissionSchema.statics.getStatistics = async function() {
+admissionSchema.statics.getStatistics = async function () {
 
   const stats = await this.aggregate([
-
     {
       $group: {
         _id: '$status',
-        count: {
-          $sum: 1
-        }
+        count: { $sum: 1 }
       }
     }
-
   ]);
 
   const result = {
@@ -414,21 +427,10 @@ admissionSchema.statics.getStatistics = async function() {
 
     result.total += stat.count;
 
-    if (stat._id === 'Pending') {
-      result.pending = stat.count;
-    }
-
-    if (stat._id === 'Approved') {
-      result.approved = stat.count;
-    }
-
-    if (stat._id === 'Rejected') {
-      result.rejected = stat.count;
-    }
-
-    if (stat._id === 'Cancelled') {
-      result.cancelled = stat.count;
-    }
+    if (stat._id === 'Pending') result.pending = stat.count;
+    if (stat._id === 'Approved') result.approved = stat.count;
+    if (stat._id === 'Rejected') result.rejected = stat.count;
+    if (stat._id === 'Cancelled') result.cancelled = stat.count;
 
   });
 
@@ -441,27 +443,20 @@ admissionSchema.statics.getStatistics = async function() {
 // INSTANCE METHOD: CALCULATE AGE FROM DOB
 // ============================================================
 
-admissionSchema.methods.calculateAge = function() {
+admissionSchema.methods.calculateAge = function () {
 
   if (!this.dateOfBirth) return 0;
 
   const today = new Date();
   const birthDate = new Date(this.dateOfBirth);
 
-  let age =
-    today.getFullYear() -
-    birthDate.getFullYear();
+  let age = today.getFullYear() - birthDate.getFullYear();
 
-  const monthDiff =
-    today.getMonth() -
-    birthDate.getMonth();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
 
   if (
     monthDiff < 0 ||
-    (
-      monthDiff === 0 &&
-      today.getDate() < birthDate.getDate()
-    )
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
   ) {
     age--;
   }
@@ -479,12 +474,9 @@ admissionSchema.set('toJSON', {
 
   virtuals: true,
 
-  transform: function(doc, ret) {
-
+  transform: function (doc, ret) {
     delete ret.__v;
-
     return ret;
-
   }
 
 });

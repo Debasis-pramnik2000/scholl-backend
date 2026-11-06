@@ -40,7 +40,8 @@ const {
   getTeacherTimetable,
 
   // Students
-  getTeacherStudents
+  getTeacherStudents,
+  getAvailableExams
 } = require('../controllers/teacherController');
 
 // All routes require authentication and teacher role
@@ -85,5 +86,5 @@ router.get('/timetable', getTeacherTimetable);
 
 // ==================== STUDENTS ====================
 router.get('/students', getTeacherStudents);
-
+router.get('/exams', getAvailableExams);
 module.exports = router;

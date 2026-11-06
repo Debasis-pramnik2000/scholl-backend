@@ -1230,7 +1230,30 @@ exports.getTeacherTimetable = async (req, res) => {
 // ======================================================
 // STUDENTS
 // ======================================================
+exports.getAvailableExams = async (req, res) => {
+  try {
+    const { class: className, section } = req.query;
 
+    const query = { published: false };
+    if (className) query.class = className;
+    if (section) query.section = section;
+
+    const exams = await Result.find(query)
+      .select('examName examDate class section academicYear')
+      .sort({ examDate: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: exams
+    });
+  } catch (error) {
+    console.error('Get available exams error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
 exports.getTeacherStudents = async (req, res) => {
   try {
     const { search } = req.query;

@@ -1950,7 +1950,38 @@ exports.getExams = async (req, res) => {
     });
   }
 };
+exports.deleteExam = async (req, res) => {
+  try {
+    const exam = await Result.findById(req.params.id);
 
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: 'Exam not found'
+      });
+    }
+
+    if (exam.published) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete a published exam'
+      });
+    }
+
+    await Result.findByIdAndDelete(req.params.id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Exam deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete exam error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
+    });
+  }
+};
 // ==================== NOTICE MANAGEMENT ====================
 
 // @desc    Create notice

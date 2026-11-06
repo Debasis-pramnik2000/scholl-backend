@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { protect, authorize } = require('../middleware/auth');
+const { deleteExam } = require('../controllers/adminController');
 
 const {
   // Dashboard
@@ -116,7 +117,7 @@ router.get('/attendance-reports', getAttendanceReports);
 router.get('/exams', getExams);
 router.post('/exams', createExam);
 router.put('/exams/:id/publish', publishResult);
-
+router.delete('/exams/:id', deleteExam);
 // Subject Management
 router.get('/subjects', getSubjects);
 router.post('/subjects', createSubject);

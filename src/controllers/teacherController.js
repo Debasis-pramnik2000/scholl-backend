@@ -11,6 +11,27 @@ const StudyMaterial = require('../models/StudyMaterial');
 const mongoose = require('mongoose');
 
 // ======================================================
+// HELPER: FIND CLASS BY OBJECTID OR "className-section"
+// ======================================================
+
+const findClassByIdOrName = async (classId) => {
+  if (!classId) return null;
+
+  if (/^[a-f0-9]{24}$/i.test(String(classId))) {
+    return await Class.findById(classId);
+  }
+
+  const parts = String(classId).split('-');
+  const className = parts[0];
+  const section = parts.slice(1).join('-') || 'A';
+
+  return await Class.findOne({
+    className: { $regex: `^${className}$`, $options: 'i' },
+    section: { $regex: `^${section}$`, $options: 'i' }
+  });
+};
+
+// ======================================================
 // HELPER: GET TEACHER SUBJECTS
 // ======================================================
 
@@ -58,7 +79,7 @@ const getTeacherSubjects = async (teacher, userId) => {
 };
 
 // ======================================================
-// HELPER: BUILD CLASS+SECTION MAP (শুধু subject teacher)
+// HELPER: BUILD CLASS+SECTION MAP
 // ======================================================
 
 const buildClassSectionMap = async (userId) => {
@@ -97,10 +118,7 @@ const buildClassSectionMap = async (userId) => {
 
   for (const entry of map.values()) {
     if (!entry._id) {
-      const cls = await Class.findOne({
-        className: entry.className,
-        section: entry.section
-      });
+      const cls = await findClassByIdOrName(`${entry.className}-${entry.section}`);
       if (cls) entry._id = cls._id;
     }
   }
@@ -183,8 +201,6 @@ exports.getTeacherDashboard = async (req, res) => {
       myStudents = await Student.countDocuments({ $or: orConditions });
     }
 
-    const totalSubjects = teacherSubjects.length;
-
     const notices = await Notice.find({
       targetRoles: 'teacher',
       isActive: true,
@@ -209,7 +225,7 @@ exports.getTeacherDashboard = async (req, res) => {
           totalClasses: classesWithCount.length,
           totalStudents: myStudents,
           myStudents,
-          totalSubjects,
+          totalSubjects: teacherSubjects.length,
           todayClasses: 0,
           todayAttendance: 0
         },
@@ -233,11 +249,7 @@ exports.getTeacherDashboard = async (req, res) => {
 
 exports.getAssignedClasses = async (req, res) => {
   try {
-    const teacher = await Teacher.findOne({ user: req.user.id }).populate({
-      path: 'subjects.subjectId',
-      select: 'name code description class section academicYear'
-    });
-
+    const teacher = await Teacher.findOne({ user: req.user.id });
     if (!teacher) {
       return res.status(404).json({ success: false, message: 'Teacher profile not found' });
     }
@@ -278,17 +290,7 @@ exports.getAssignedClasses = async (req, res) => {
 
 exports.getClassStudents = async (req, res) => {
   try {
-    const { classId } = req.params;
-    let classData = null;
-
-    if (/^[a-f0-9]{24}$/i.test(classId)) {
-      classData = await Class.findById(classId);
-    } else {
-      const parts = classId.split('-');
-      const className = parts[0];
-      const section = parts.slice(1).join('-');
-      classData = await Class.findOne({ className, section });
-    }
+    const classData = await findClassByIdOrName(req.params.classId);
 
     if (!classData) {
       return res.status(404).json({ success: false, message: 'Class not found' });
@@ -327,7 +329,11 @@ exports.getClassStudents = async (req, res) => {
       data: {
         class: {
           ...classData.toObject(),
-          subjects: teacherSubjects.map(s => ({ _id: s._id, name: s.name, code: s.code }))
+          subjects: teacherSubjects.map(s => ({
+            _id: s._id,
+            name: s.name,
+            code: s.code
+          }))
         },
         students
       }
@@ -347,7 +353,15 @@ exports.getClassStudents = async (req, res) => {
 
 exports.markStudentAttendance = async (req, res) => {
   try {
-    const { studentId, class: className, section, status, remarks, latitude, longitude } = req.body;
+    const {
+      studentId,
+      class: className,
+      section,
+      status,
+      remarks,
+      latitude,
+      longitude
+    } = req.body;
 
     const student = await Student.findById(studentId);
     if (!student) {
@@ -420,7 +434,8 @@ exports.getClassAttendance = async (req, res) => {
     const { classId } = req.params;
     const { date } = req.query;
 
-    const classData = await Class.findById(classId);
+    const classData = await findClassByIdOrName(classId);
+
     if (!classData) {
       return res.status(404).json({ success: false, message: 'Class not found' });
     }
@@ -506,7 +521,8 @@ exports.getAttendanceReport = async (req, res) => {
     const { classId } = req.params;
     const { month, year } = req.query;
 
-    const classData = await Class.findById(classId);
+    const classData = await findClassByIdOrName(classId);
+
     if (!classData) {
       return res.status(404).json({ success: false, message: 'Class not found' });
     }
@@ -682,8 +698,6 @@ exports.enterMarks = async (req, res) => {
       });
     }
 
-    const subjectDoc = teacherSubjects.find(s => s.name === incomingSubjects[0].name);
-
     const normalizedSubjects = incomingSubjects.map(s => ({
       name: s.name,
       marksObtained: Number(s.marksObtained) || 0,
@@ -740,7 +754,7 @@ exports.getClassMarks = async (req, res) => {
     const { classId } = req.params;
     const { examName } = req.query;
 
-    const classData = await Class.findById(classId);
+    const classData = await findClassByIdOrName(classId);
     if (!classData) {
       return res.status(404).json({ success: false, message: 'Class not found' });
     }
@@ -771,10 +785,7 @@ exports.getClassMarks = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: {
-        class: classData,
-        results
-      }
+      data: { class: classData, results }
     });
   } catch (error) {
     console.error('Get class marks error:', error);
@@ -865,7 +876,7 @@ exports.updateMarks = async (req, res) => {
             return existing;
           }
           return {
-            ...existing.toObject?.() || existing,
+            ...(existing.toObject?.() || existing),
             marksObtained: Number(incoming.marksObtained) || 0,
             totalMarks: Number(incoming.totalMarks) || 100,
             grade: calculateGrade(Number(incoming.marksObtained) || 0, Number(incoming.totalMarks) || 100)
@@ -1147,13 +1158,12 @@ exports.getTeacherTimetable = async (req, res) => {
 };
 
 // ======================================================
-// AVAILABLE EXAMS (for teacher) — class+section based
+// AVAILABLE EXAMS (for teacher)
 // ======================================================
 
 exports.getAvailableExams = async (req, res) => {
   try {
     const { class: className, section } = req.query;
-
     const query = {};
     if (className) query.class = className;
     if (section) query.section = section;
@@ -1296,7 +1306,7 @@ exports.publishResult = async (req, res) => {
       if (teacherSubjectNames.includes(sub.name)) {
         publishedCount++;
         return {
-          ...sub.toObject?.() || sub,
+          ...(sub.toObject?.() || sub),
           teacher: sub.teacher || req.user.id,
           published: true,
           publishedBy: req.user.id,

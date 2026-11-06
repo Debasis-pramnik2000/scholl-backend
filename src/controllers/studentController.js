@@ -276,6 +276,7 @@ exports.getResults = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      studentId: student._id,
       data: results
     });
   } catch (error) {

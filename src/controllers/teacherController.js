@@ -658,7 +658,6 @@ exports.enterMarks = async (req, res) => {
     } = req.body;
 
     const student = await Student.findById(studentId);
-
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -666,16 +665,28 @@ exports.enterMarks = async (req, res) => {
       });
     }
 
-    const classData = await Class.findOne({
-      className: className || student.class,
-      section: section || student.section,
-      classTeacher: req.user.id
+    const finalClass = className || student.class;
+    const finalSection = section || student.section;
+    const finalYear = academicYear || new Date().getFullYear().toString();
+
+    const exam = await Result.findOne({
+      class: finalClass,
+      section: finalSection,
+      examName,
+      academicYear: finalYear
     });
 
-    if (!classData) {
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: 'Exam not found. Please ask admin to create this exam.'
+      });
+    }
+
+    if (exam.teacher && exam.teacher.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
-        message: 'You are not authorized to enter marks for this class'
+        message: 'You are not assigned to this exam'
       });
     }
 
@@ -687,8 +698,7 @@ exports.enterMarks = async (req, res) => {
       totalObtained += Number(sub.marksObtained) || 0;
     });
 
-    const percentage =
-      totalMarks > 0 ? (totalObtained / totalMarks) * 100 : 0;
+    const percentage = totalMarks > 0 ? (totalObtained / totalMarks) * 100 : 0;
 
     let grade = 'F';
     if (percentage >= 90) grade = 'A+';
@@ -699,37 +709,44 @@ exports.enterMarks = async (req, res) => {
     else if (percentage >= 40) grade = 'C';
     else if (percentage >= 33) grade = 'D';
 
-    const result = await Result.findOneAndUpdate(
-      {
+    let result = await Result.findOne({
+      student: studentId,
+      examName,
+      class: finalClass,
+      section: finalSection,
+      academicYear: finalYear
+    });
+
+    if (result) {
+      result.subjects = subjects || [];
+      result.totalMarks = totalObtained;
+      result.percentage = parseFloat(percentage.toFixed(2));
+      result.grade = grade;
+      result.examDate = examDate || result.examDate || new Date();
+      await result.save();
+    } else {
+      result = await Result.create({
         student: studentId,
+        class: finalClass,
+        section: finalSection,
         examName,
-        class: className || student.class,
-        section: section || student.section,
-        academicYear:
-          academicYear || new Date().getFullYear().toString()
-      },
-      {
-        student: studentId,
-        class: className || student.class,
-        section: section || student.section,
-        examName,
-        examDate: examDate || new Date(),
+        examDate: examDate || exam.examDate || new Date(),
         subjects: subjects || [],
         totalMarks: totalObtained,
         percentage: parseFloat(percentage.toFixed(2)),
         grade,
-        academicYear:
-          academicYear || new Date().getFullYear().toString(),
+        academicYear: finalYear,
+        teacher: exam.teacher || req.user.id,
         published: false
-      },
-      { returnDocument: 'after', runValidators: true, upsert: true }
-    );
+      });
+    }
 
     return res.status(201).json({
       success: true,
       message: 'Marks entered successfully',
       data: result
     });
+
   } catch (error) {
     console.error('Enter marks error:', error);
     return res.status(500).json({
@@ -738,6 +755,26 @@ exports.enterMarks = async (req, res) => {
     });
   }
 };
+
+    const exam = await Result.findOne({
+      class: className || student.class,
+      section: section || student.section,
+      examName,
+      academicYear: academicYear || new Date().getFullYear().toString()
+    });
+
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+
+    if (exam.teacher && exam.teacher.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned to this exam'
+      });
+    }
+
+  
 
 exports.getClassMarks = async (req, res) => {
   try {
@@ -1234,24 +1271,21 @@ exports.getAvailableExams = async (req, res) => {
   try {
     const { class: className, section } = req.query;
 
-    const query = { published: false };
+    const query = {
+      published: false,
+      teacher: req.user.id
+    };
     if (className) query.class = className;
     if (section) query.section = section;
 
     const exams = await Result.find(query)
-      .select('examName examDate class section academicYear')
+      .select('examName examDate class section academicYear teacher')
       .sort({ examDate: -1 });
 
-    return res.status(200).json({
-      success: true,
-      data: exams
-    });
+    return res.status(200).json({ success: true, data: exams });
   } catch (error) {
     console.error('Get available exams error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 exports.getTeacherStudents = async (req, res) => {

@@ -278,7 +278,17 @@ exports.getAssignedClasses = async (req, res) => {
 
 exports.getClassStudents = async (req, res) => {
   try {
-    const classData = await Class.findById(req.params.classId);
+    const { classId } = req.params;
+    let classData = null;
+
+    if (/^[a-f0-9]{24}$/i.test(classId)) {
+      classData = await Class.findById(classId);
+    } else {
+      const parts = classId.split('-');
+      const className = parts[0];
+      const section = parts.slice(1).join('-');
+      classData = await Class.findOne({ className, section });
+    }
 
     if (!classData) {
       return res.status(404).json({ success: false, message: 'Class not found' });

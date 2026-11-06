@@ -1281,38 +1281,73 @@ exports.getTeacherStudents = async (req, res) => {
   try {
     const { search } = req.query;
 
-    const classes = await Class.find({
+    // ১. Class teacher হিসেবে assigned classes
+    const classTeacherClasses = await Class.find({
       classTeacher: req.user.id,
       isActive: true
     }).populate('subjects.subject', 'name code');
 
-    if (classes.length === 0) {
+    // ২. Subject-এ teacher হিসেবে assigned classes
+    const subjectAssigned = await Subject.find({
+      teacher: req.user.id,
+      isActive: true
+    });
+
+    // Class+Section key map তৈরি
+    const classSectionMap = new Map();
+
+    classTeacherClasses.forEach(c => {
+      classSectionMap.set(`${c.className}|${c.section}`, {
+        className: c.className,
+        section: c.section,
+        classId: c._id,
+        subjects: c.subjects?.map(s => ({
+          name: s.subject?.name || s.name || 'N/A',
+          code: s.subject?.code || s.code || 'N/A'
+        })) || []
+      });
+    });
+
+    subjectAssigned.forEach(sub => {
+      const key = `${sub.class}|${sub.section}`;
+      if (!classSectionMap.has(key)) {
+        classSectionMap.set(key, {
+          className: sub.class,
+          section: sub.section,
+          classId: null,
+          subjects: []
+        });
+      }
+      const entry = classSectionMap.get(key);
+      entry.subjects.push({ name: sub.name, code: sub.code || '' });
+    });
+
+    const classSectionList = Array.from(classSectionMap.values());
+
+    if (classSectionList.length === 0) {
       return res.status(200).json({
         success: true,
         data: {
           students: [],
           classes: [],
+          totalStudents: 0,
+          totalClasses: 0,
           message: 'No classes assigned'
         }
       });
     }
 
-    const subjects = await Subject.find({
-      teacher: req.user.id,
-      isActive: true
-    });
+    const orConditions = classSectionList.map(c => ({
+      class: c.className,
+      section: c.section
+    }));
 
-    let query = {
-      $or: classes.map((c) => ({
-        class: c.className,
-        section: c.section
-      }))
-    };
+    let query = { $or: orConditions };
 
     if (search) {
       query = {
         $and: [
-          { $or: query.$or },
+          { $or: orConditions },
           {
             $or: [
               { rollNumber: { $regex: search, $options: 'i' } },
@@ -1324,33 +1359,18 @@ exports.getTeacherStudents = async (req, res) => {
     }
 
     const students = await Student.find(query)
-      .populate('user', 'name email phone profilePicture')
+      .populate('user', 'name email phone profilePicture username')
       .sort({ class: 1, section: 1, rollNumber: 1 });
 
-    const enhancedStudents = students.map((student) => {
-      const classData = classes.find(
-        (c) =>
-          c.className === student.class && c.section === student.section
+    const enhancedStudents = students.map(student => {
+      const classData = classSectionList.find(
+        c => c.className === student.class && c.section === student.section
       );
-
-      const classSubjects =
-        classData?.subjects?.map((s) => ({
-          name: s.subject?.name || s.name || 'N/A',
-          code: s.subject?.code || s.code || 'N/A'
-        })) || [];
-
-      const teacherSubjects = subjects
-        .filter(
-          (s) =>
-            s.class === student.class && s.section === student.section
-        )
-        .map((s) => ({ name: s.name, code: s.code }));
 
       return {
         ...student.toObject(),
-        classSubjects,
-        teacherSubjects,
-        totalSubjects: teacherSubjects.length
+        teacherSubjects: classData?.subjects || [],
+        totalSubjects: classData?.subjects?.length || 0
       };
     });
 
@@ -1358,17 +1378,17 @@ exports.getTeacherStudents = async (req, res) => {
       success: true,
       data: {
         students: enhancedStudents,
-        classes: classes.map((c) => ({
-          _id: c._id,
+        classes: classSectionList.map(c => ({
+          _id: c.classId || `${c.className}-${c.section}`,
           className: c.className,
           section: c.section,
           studentCount: students.filter(
-            (s) => s.class === c.className && s.section === c.section
+            s => s.class === c.className && s.section === c.section
           ).length,
-          subjects: c.subjects?.map((s) => s.subject?.name || s.name) || []
+          subjects: c.subjects.map(s => s.name)
         })),
         totalStudents: students.length,
-        totalClasses: classes.length
+        totalClasses: classSectionList.length
       }
     });
   } catch (error) {

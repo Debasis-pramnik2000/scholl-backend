@@ -138,18 +138,13 @@ exports.getTeacherProfile = async (req, res) => {
 
 exports.getTeacherDashboard = async (req, res) => {
   try {
-    const teacher = await Teacher.findOne({
-      user: req.user.id
-    }).populate({
+    const teacher = await Teacher.findOne({ user: req.user.id }).populate({
       path: 'subjects.subjectId',
       select: 'name code description class section academicYear'
     });
 
     if (!teacher) {
-      return res.status(404).json({
-        success: false,
-        message: 'Teacher profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Teacher profile not found' });
     }
 
     const classes = await Class.find({
@@ -162,57 +157,72 @@ exports.getTeacherDashboard = async (req, res) => {
 
     const teacherSubjects = await getTeacherSubjects(teacher, req.user.id);
 
+    // Subject-এ assigned class+section
+    const subjectAssigned = await Subject.find({
+      teacher: req.user.id,
+      isActive: true
+    });
+
+    const classSectionMap = new Map();
+
+    classes.forEach(c => {
+      classSectionMap.set(`${c.className}|${c.section}`, {
+        className: c.className,
+        section: c.section,
+        classId: c._id,
+        subjects: c.subjects?.map(s => ({
+          name: s.subject?.name || s.name || 'N/A',
+          code: s.subject?.code || s.code || 'N/A'
+        })) || []
+      });
+    });
+
+    subjectAssigned.forEach(sub => {
+      const key = `${sub.class}|${sub.section}`;
+      if (!classSectionMap.has(key)) {
+        classSectionMap.set(key, {
+          className: sub.class,
+          section: sub.section,
+          classId: null,
+          subjects: []
+        });
+      }
+      classSectionMap.get(key).subjects.push({ name: sub.name, code: sub.code || '' });
+    });
+
+    const classSectionList = Array.from(classSectionMap.values());
+
     const classesWithCount = await Promise.all(
-      classes.map(async (cls) => {
+      classSectionList.map(async (cls) => {
         const studentCount = await Student.countDocuments({
           class: cls.className,
           section: cls.section
         });
 
-        const subjects = getSubjectsForClass(cls, teacherSubjects);
-
         return {
-          ...cls.toObject(),
+          _id: cls.classId || `${cls.className}-${cls.section}`,
+          className: cls.className,
+          section: cls.section,
           studentCount,
-          subjectCount: subjects.length,
-          subjects
+          subjectCount: cls.subjects.length,
+          subjects: cls.subjects
         };
       })
     );
 
-    const today = new Date();
-    const todayName = [
-      'Sunday', 'Monday', 'Tuesday', 'Wednesday',
-      'Thursday', 'Friday', 'Saturday'
-    ][today.getDay()];
+    // My students count
+    const orConditions = classSectionList.map(c => ({
+      class: c.className,
+      section: c.section
+    }));
 
-    const todayTimetable = await Timetable.find({
-      'periods.teacher': req.user.id,
-      day: todayName
-    })
-      .populate('periods.subject', 'name code')
-      .populate('periods.teacher', 'name');
-
-    let totalStudents = 0;
-
-    for (const cls of classes) {
-      const count = await Student.countDocuments({
-        class: cls.className,
-        section: cls.section
-      });
-      totalStudents += count;
+    let myStudents = 0;
+    if (orConditions.length > 0) {
+      myStudents = await Student.countDocuments({ $or: orConditions });
     }
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
-    const todayAttendance = await Attendance.find({
-      markedBy: req.user.id,
-      date: { $gte: todayStart, $lte: todayEnd }
-    });
+    // Subject count
+    const totalSubjects = teacherSubjects.length + subjectAssigned.length;
 
     const notices = await Notice.find({
       targetRoles: 'teacher',
@@ -236,12 +246,14 @@ exports.getTeacherDashboard = async (req, res) => {
         },
         statistics: {
           totalClasses: classesWithCount.length,
-          totalStudents,
-          todayClasses: todayTimetable.length,
-          todayAttendance: todayAttendance.length
+          totalStudents: myStudents,
+          myStudents,
+          totalSubjects,
+          todayClasses: 0,
+          todayAttendance: 0
         },
         classes: classesWithCount,
-        todayTimetable,
+        todayTimetable: [],
         recentNotices: notices
       }
     });

@@ -9,11 +9,14 @@ const {
   getResults,
   getExamSchedule,
   getNotices,
-    getStudentMaterials  
-
+  getStudentMaterials
 } = require('../controllers/studentController');
 
-// All routes require authentication and student role
+const {
+  generateReportCard,
+  generateReportCardExcel
+} = require('../controllers/reportController');
+
 router.use(protect);
 router.use(authorize('student'));
 
@@ -24,6 +27,9 @@ router.get('/timetable', getTimetable);
 router.get('/results', getResults);
 router.get('/exams', getExamSchedule);
 router.get('/notices', getNotices);
-router.get('/materials', getStudentMaterials);  // ✅ Add this route
+router.get('/materials', getStudentMaterials);
+
+router.get('/report-card/:studentId', generateReportCard);
+router.get('/report-card/excel/:studentId', generateReportCardExcel);
 
 module.exports = router;

@@ -19,7 +19,6 @@ exports.getDashboard = async (req, res) => {
       });
     }
 
-    // Get today's attendance
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayAttendance = await Attendance.findOne({
@@ -27,7 +26,6 @@ exports.getDashboard = async (req, res) => {
       date: { $gte: today }
     });
 
-    // Get attendance summary for current month
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const attendanceRecords = await Attendance.find({
       student: student._id,
@@ -38,7 +36,6 @@ exports.getDashboard = async (req, res) => {
     const presentDays = attendanceRecords.filter(a => a.status === 'Present').length;
     const attendancePercentage = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
 
-    // Get upcoming timetable
     const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][today.getDay()];
     const timetable = await Timetable.findOne({
       class: student.class,
@@ -46,21 +43,29 @@ exports.getDashboard = async (req, res) => {
       day: todayName
     });
 
-    // Get recent notices
     const notices = await Notice.find({
       targetRoles: 'student',
       isActive: true,
-      expiresAt: { $gt: new Date() }
+      $or: [
+        { expiresAt: { $exists: false } },
+        { expiresAt: { $gt: new Date() } }
+      ]
     })
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .populate('author', 'name');
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate('author', 'name');
 
-    // Get upcoming exams
-    const exams = await Result.find({
+    const examsRaw = await Result.find({
       class: student.class,
-      section: student.section,
-      published: false
+      section: student.section
+    })
+      .select('examName examDate class section academicYear')
+      .sort({ examDate: 1 });
+
+    const uniqueExams = new Map();
+    examsRaw.forEach(e => {
+      const key = `${e.examName}|${e.examDate?.toISOString() || ''}|${e.academicYear}`;
+      if (!uniqueExams.has(key)) uniqueExams.set(key, e);
     });
 
     res.status(200).json({
@@ -80,7 +85,7 @@ exports.getDashboard = async (req, res) => {
         },
         timetable: timetable || null,
         notices,
-        upcomingExams: exams
+        upcomingExams: Array.from(uniqueExams.values())
       }
     });
   } catch (error) {
@@ -99,7 +104,6 @@ exports.markAttendance = async (req, res) => {
   try {
     const { latitude, longitude, accuracy } = req.body;
 
-    // Check if student exists
     const student = await Student.findOne({ user: req.user.id });
     if (!student) {
       return res.status(404).json({
@@ -108,7 +112,6 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // Check if already marked attendance today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const existingAttendance = await Attendance.findOne({
@@ -123,11 +126,9 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // Check location (1km = 1000 meters)
     const instituteLat = parseFloat(process.env.INSTITUTE_LATITUDE);
     const instituteLng = parseFloat(process.env.INSTITUTE_LONGITUDE);
-    
-    // Haversine formula to calculate distance
+
     const distance = getDistanceFromLatLonInKm(
       latitude,
       longitude,
@@ -142,18 +143,13 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // Mark attendance
     const attendance = await Attendance.create({
       student: student._id,
       user: req.user.id,
       class: student.class,
       section: student.section,
       status: 'Present',
-      location: {
-        latitude,
-        longitude,
-        accuracy
-      },
+      location: { latitude, longitude, accuracy },
       markedBy: req.user.id,
       checkInTime: new Date()
     });
@@ -178,7 +174,7 @@ exports.markAttendance = async (req, res) => {
 exports.getAttendanceHistory = async (req, res) => {
   try {
     const { month, year } = req.query;
-    
+
     const student = await Student.findOne({ user: req.user.id });
     if (!student) {
       return res.status(404).json({
@@ -188,17 +184,15 @@ exports.getAttendanceHistory = async (req, res) => {
     }
 
     let query = { student: student._id };
-    
+
     if (month && year) {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0);
       query.date = { $gte: startDate, $lte: endDate };
     }
 
-    const attendance = await Attendance.find(query)
-      .sort({ date: -1 });
+    const attendance = await Attendance.find(query).sort({ date: -1 });
 
-    // Calculate statistics
     const totalDays = attendance.length;
     const presentDays = attendance.filter(a => a.status === 'Present').length;
     const absentDays = attendance.filter(a => a.status === 'Absent').length;
@@ -213,7 +207,8 @@ exports.getAttendanceHistory = async (req, res) => {
           presentDays,
           absentDays,
           lateDays,
-          attendancePercentage: totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(2) : 0
+          attendancePercentage:
+            totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(2) : 0
         }
       }
     });
@@ -257,7 +252,7 @@ exports.getTimetable = async (req, res) => {
   }
 };
 
-// @desc    Get results
+// @desc    Get results (only published subjects)
 // @route   GET /api/student/results
 // @access  Private (Student only)
 exports.getResults = async (req, res) => {
@@ -270,15 +265,21 @@ exports.getResults = async (req, res) => {
       });
     }
 
-    const results = await Result.find({
-      student: student._id,
-      published: true
-    }).sort({ createdAt: -1 });
+    const results = await Result.find({ student: student._id })
+      .sort({ createdAt: -1 });
+
+    const filtered = results
+      .map(r => {
+        const obj = r.toObject();
+        obj.subjects = (obj.subjects || []).filter(s => s.published === true);
+        return obj;
+      })
+      .filter(r => r.subjects.length > 0);
 
     res.status(200).json({
       success: true,
       studentId: student._id,
-      data: results
+      data: filtered
     });
   } catch (error) {
     console.error('Get results error:', error);
@@ -289,12 +290,11 @@ exports.getResults = async (req, res) => {
   }
 };
 
-// @desc    Get study materials for student
+// @desc    Get study materials
 // @route   GET /api/student/materials
 // @access  Private (Student only)
 exports.getStudentMaterials = async (req, res) => {
   try {
-    // Get student's class and section
     const student = await Student.findOne({ user: req.user.id });
     if (!student) {
       return res.status(404).json({
@@ -303,14 +303,13 @@ exports.getStudentMaterials = async (req, res) => {
       });
     }
 
-    // Get materials for student's class and section
     const materials = await StudyMaterial.find({
       class: student.class,
       section: student.section,
       isActive: true
     })
-    .populate('uploadedBy', 'name')
-    .sort({ createdAt: -1 });
+      .populate('uploadedBy', 'name')
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -325,7 +324,7 @@ exports.getStudentMaterials = async (req, res) => {
   }
 };
 
-// @desc    Get exam schedule
+// @desc    Get exam schedule (all exams for class/section, no published filter)
 // @route   GET /api/student/exams
 // @access  Private (Student only)
 exports.getExamSchedule = async (req, res) => {
@@ -340,13 +339,20 @@ exports.getExamSchedule = async (req, res) => {
 
     const exams = await Result.find({
       class: student.class,
-      section: student.section,
-      published: false
-    }).sort({ examDate: 1 });
+      section: student.section
+    })
+      .select('examName examDate class section academicYear')
+      .sort({ examDate: 1 });
+
+    const unique = new Map();
+    exams.forEach(e => {
+      const key = `${e.examName}|${e.examDate?.toISOString() || ''}|${e.academicYear}`;
+      if (!unique.has(key)) unique.set(key, e);
+    });
 
     res.status(200).json({
       success: true,
-      data: exams
+      data: Array.from(unique.values())
     });
   } catch (error) {
     console.error('Get exams error:', error);
@@ -365,10 +371,13 @@ exports.getNotices = async (req, res) => {
     const notices = await Notice.find({
       targetRoles: 'student',
       isActive: true,
-      expiresAt: { $gt: new Date() }
+      $or: [
+        { expiresAt: { $exists: false } },
+        { expiresAt: { $gt: new Date() } }
+      ]
     })
-    .sort({ priority: -1, createdAt: -1 })
-    .populate('author', 'name');
+      .sort({ priority: -1, createdAt: -1 })
+      .populate('author', 'name');
 
     res.status(200).json({
       success: true,
@@ -383,9 +392,9 @@ exports.getNotices = async (req, res) => {
   }
 };
 
-// Helper function: Calculate distance between two coordinates
+// Helper functions
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a =
@@ -393,8 +402,7 @@ function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
+  return R * c;
 }
 
 function deg2rad(deg) {

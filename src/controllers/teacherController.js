@@ -746,7 +746,6 @@ exports.enterMarks = async (req, res) => {
       message: 'Marks entered successfully',
       data: result
     });
-
   } catch (error) {
     console.error('Enter marks error:', error);
     return res.status(500).json({
@@ -756,25 +755,9 @@ exports.enterMarks = async (req, res) => {
   }
 };
 
-    const exam = await Result.findOne({
-      class: className || student.class,
-      section: section || student.section,
-      examName,
-      academicYear: academicYear || new Date().getFullYear().toString()
-    });
-
-    if (!exam) {
-      return res.status(404).json({ success: false, message: 'Exam not found' });
-    }
-
-    if (exam.teacher && exam.teacher.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not assigned to this exam'
-      });
-    }
-
-  
+// ======================================================
+// GET CLASS MARKS
+// ======================================================
 
 exports.getClassMarks = async (req, res) => {
   try {
@@ -1265,8 +1248,9 @@ exports.getTeacherTimetable = async (req, res) => {
 };
 
 // ======================================================
-// STUDENTS
+// AVAILABLE EXAMS (for teacher)
 // ======================================================
+
 exports.getAvailableExams = async (req, res) => {
   try {
     const { class: className, section } = req.query;
@@ -1288,6 +1272,11 @@ exports.getAvailableExams = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// ======================================================
+// STUDENTS
+// ======================================================
+
 exports.getTeacherStudents = async (req, res) => {
   try {
     const { search } = req.query;
@@ -1390,6 +1379,11 @@ exports.getTeacherStudents = async (req, res) => {
     });
   }
 };
+
+// ======================================================
+// PUBLISH RESULT
+// ======================================================
+
 exports.publishResult = async (req, res) => {
   try {
     const result = await Result.findById(req.params.id);

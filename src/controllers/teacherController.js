@@ -104,6 +104,70 @@ const getSubjectsForClass = (cls, teacherSubjects) => {
 };
 
 // ======================================================
+// HELPER: BUILD CLASS+SECTION MAP
+// ======================================================
+
+const buildClassSectionMap = async (userId) => {
+  const classTeacherClasses = await Class.find({
+    classTeacher: userId,
+    isActive: true
+  })
+    .populate('classTeacher', 'name email')
+    .populate('subjects.subject', 'name code description class section');
+
+  const subjectAssigned = await Subject.find({
+    teacher: userId,
+    isActive: true
+  });
+
+  const map = new Map();
+
+  classTeacherClasses.forEach((c) => {
+    map.set(`${c.className}|${c.section}`, {
+      _id: c._id,
+      className: c.className,
+      section: c.section,
+      academicYear: c.academicYear,
+      classTeacher: c.classTeacher,
+      isClassTeacher: true,
+      subjects: (c.subjects || []).map((s) => ({
+        _id: s.subject?._id || s._id,
+        name: s.subject?.name || s.name || 'Subject',
+        code: s.subject?.code || s.code || ''
+      }))
+    });
+  });
+
+  subjectAssigned.forEach((sub) => {
+    const key = `${sub.class}|${sub.section}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        _id: null,
+        className: sub.class,
+        section: sub.section,
+        academicYear: sub.academicYear,
+        classTeacher: null,
+        isClassTeacher: false,
+        subjects: []
+      });
+    }
+    const entry = map.get(key);
+    const exists = entry.subjects.find(
+      (s) => s._id?.toString() === sub._id.toString()
+    );
+    if (!exists) {
+      entry.subjects.push({
+        _id: sub._id,
+        name: sub.name,
+        code: sub.code || ''
+      });
+    }
+  });
+
+  return Array.from(map.values());
+};
+
+// ======================================================
 // PROFILE
 // ======================================================
 
@@ -147,50 +211,8 @@ exports.getTeacherDashboard = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Teacher profile not found' });
     }
 
-    const classes = await Class.find({
-      classTeacher: req.user.id,
-      isActive: true
-    })
-      .populate('classTeacher', 'name email')
-      .populate('subjects.subject', 'name code description class section')
-      .populate('subjects.teacher', 'name email');
-
+    const classSectionList = await buildClassSectionMap(req.user.id);
     const teacherSubjects = await getTeacherSubjects(teacher, req.user.id);
-
-    // Subject-এ assigned class+section
-    const subjectAssigned = await Subject.find({
-      teacher: req.user.id,
-      isActive: true
-    });
-
-    const classSectionMap = new Map();
-
-    classes.forEach(c => {
-      classSectionMap.set(`${c.className}|${c.section}`, {
-        className: c.className,
-        section: c.section,
-        classId: c._id,
-        subjects: c.subjects?.map(s => ({
-          name: s.subject?.name || s.name || 'N/A',
-          code: s.subject?.code || s.code || 'N/A'
-        })) || []
-      });
-    });
-
-    subjectAssigned.forEach(sub => {
-      const key = `${sub.class}|${sub.section}`;
-      if (!classSectionMap.has(key)) {
-        classSectionMap.set(key, {
-          className: sub.class,
-          section: sub.section,
-          classId: null,
-          subjects: []
-        });
-      }
-      classSectionMap.get(key).subjects.push({ name: sub.name, code: sub.code || '' });
-    });
-
-    const classSectionList = Array.from(classSectionMap.values());
 
     const classesWithCount = await Promise.all(
       classSectionList.map(async (cls) => {
@@ -200,18 +222,18 @@ exports.getTeacherDashboard = async (req, res) => {
         });
 
         return {
-          _id: cls.classId || `${cls.className}-${cls.section}`,
+          _id: cls._id || `${cls.className}-${cls.section}`,
           className: cls.className,
           section: cls.section,
           studentCount,
           subjectCount: cls.subjects.length,
+          isClassTeacher: cls.isClassTeacher,
           subjects: cls.subjects
         };
       })
     );
 
-    // My students count
-    const orConditions = classSectionList.map(c => ({
+    const orConditions = classSectionList.map((c) => ({
       class: c.className,
       section: c.section
     }));
@@ -221,8 +243,7 @@ exports.getTeacherDashboard = async (req, res) => {
       myStudents = await Student.countDocuments({ $or: orConditions });
     }
 
-    // Subject count
-    const totalSubjects = teacherSubjects.length + subjectAssigned.length;
+    const totalSubjects = teacherSubjects.length;
 
     const notices = await Notice.find({
       targetRoles: 'teacher',
@@ -272,44 +293,34 @@ exports.getTeacherDashboard = async (req, res) => {
 
 exports.getAssignedClasses = async (req, res) => {
   try {
-    const teacher = await Teacher.findOne({
-      user: req.user.id
-    }).populate({
+    const teacher = await Teacher.findOne({ user: req.user.id }).populate({
       path: 'subjects.subjectId',
       select: 'name code description class section academicYear'
     });
 
     if (!teacher) {
-      return res.status(404).json({
-        success: false,
-        message: 'Teacher profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Teacher profile not found' });
     }
 
-    const classes = await Class.find({
-      classTeacher: req.user.id,
-      isActive: true
-    })
-      .populate('classTeacher', 'name email')
-      .populate('subjects.subject', 'name code description class section')
-      .populate('subjects.teacher', 'name email');
-
-    const teacherSubjects = await getTeacherSubjects(teacher, req.user.id);
+    const classSectionList = await buildClassSectionMap(req.user.id);
 
     const classesWithCount = await Promise.all(
-      classes.map(async (cls) => {
+      classSectionList.map(async (cls) => {
         const studentCount = await Student.countDocuments({
           class: cls.className,
           section: cls.section
         });
 
-        const subjects = getSubjectsForClass(cls, teacherSubjects);
-
         return {
-          ...cls.toObject(),
+          _id: cls._id || `${cls.className}-${cls.section}`,
+          className: cls.className,
+          section: cls.section,
+          academicYear: cls.academicYear,
+          classTeacher: cls.classTeacher,
+          isClassTeacher: cls.isClassTeacher,
           studentCount,
-          subjectCount: subjects.length,
-          subjects
+          subjectCount: cls.subjects.length,
+          subjects: cls.subjects
         };
       })
     );
@@ -332,16 +343,21 @@ exports.getClassStudents = async (req, res) => {
     const classData = await Class.findById(req.params.classId);
 
     if (!classData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Class not found'
-      });
+      return res.status(404).json({ success: false, message: 'Class not found' });
     }
 
-    if (
-      !classData.classTeacher ||
-      classData.classTeacher.toString() !== req.user.id
-    ) {
+    const isClassTeacher =
+      classData.classTeacher &&
+      classData.classTeacher.toString() === req.user.id;
+
+    const subjectAssigned = await Subject.findOne({
+      teacher: req.user.id,
+      class: classData.className,
+      section: classData.section,
+      isActive: true
+    });
+
+    if (!isClassTeacher && !subjectAssigned) {
       return res.status(403).json({
         success: false,
         message: 'You are not assigned to this class'
@@ -390,10 +406,7 @@ exports.markStudentAttendance = async (req, res) => {
     const student = await Student.findById(studentId);
 
     if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found'
-      });
+      return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
     const classData = await Class.findOne({
@@ -464,10 +477,7 @@ exports.getClassAttendance = async (req, res) => {
     const classData = await Class.findById(classId);
 
     if (!classData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Class not found'
-      });
+      return res.status(404).json({ success: false, message: 'Class not found' });
     }
 
     if (
@@ -538,10 +548,7 @@ exports.getClassAttendance = async (req, res) => {
     });
   } catch (error) {
     console.error('Get class attendance error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -553,10 +560,7 @@ exports.getAttendanceReport = async (req, res) => {
     const classData = await Class.findById(classId);
 
     if (!classData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Class not found'
-      });
+      return res.status(404).json({ success: false, message: 'Class not found' });
     }
 
     if (
@@ -572,7 +576,7 @@ exports.getAttendanceReport = async (req, res) => {
     const students = await Student.find({
       class: classData.className,
       section: classData.section
-    });
+    }).populate('user', 'name');
 
     let startDate;
     let endDate;
@@ -626,8 +630,7 @@ exports.getAttendanceReport = async (req, res) => {
         present,
         absent: total - present,
         total,
-        percentage:
-          total > 0 ? ((present / total) * 100).toFixed(2) : 0
+        percentage: total > 0 ? ((present / total) * 100).toFixed(2) : 0
       };
     });
 
@@ -646,10 +649,7 @@ exports.getAttendanceReport = async (req, res) => {
     });
   } catch (error) {
     console.error('Get attendance report error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -671,10 +671,7 @@ exports.enterMarks = async (req, res) => {
 
     const student = await Student.findById(studentId);
     if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found'
-      });
+      return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
     const finalClass = className || student.class;
@@ -767,10 +764,6 @@ exports.enterMarks = async (req, res) => {
   }
 };
 
-// ======================================================
-// GET CLASS MARKS
-// ======================================================
-
 exports.getClassMarks = async (req, res) => {
   try {
     const { classId } = req.params;
@@ -779,10 +772,7 @@ exports.getClassMarks = async (req, res) => {
     const classData = await Class.findById(classId);
 
     if (!classData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Class not found'
-      });
+      return res.status(404).json({ success: false, message: 'Class not found' });
     }
 
     if (
@@ -800,18 +790,14 @@ exports.getClassMarks = async (req, res) => {
       section: classData.section
     };
 
-    if (examName) {
-      query.examName = examName;
-    }
+    if (examName) query.examName = examName;
 
     const results = await Result.find(query)
       .populate('student', 'rollNumber')
       .sort({ 'student.rollNumber': 1 });
 
     const groupedResults = results.reduce((acc, result) => {
-      if (!acc[result.examName]) {
-        acc[result.examName] = [];
-      }
+      if (!acc[result.examName]) acc[result.examName] = [];
       acc[result.examName].push(result);
       return acc;
     }, {});
@@ -826,10 +812,7 @@ exports.getClassMarks = async (req, res) => {
     });
   } catch (error) {
     console.error('Get class marks error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -837,23 +820,27 @@ exports.getResultsByClass = async (req, res) => {
   try {
     const { class: className, section } = req.query;
 
-    const classData = await Class.findOne({
+    const isClassTeacher = await Class.findOne({
       className,
       section,
       classTeacher: req.user.id
     });
 
-    if (!classData) {
+    const isSubjectTeacher = await Subject.findOne({
+      teacher: req.user.id,
+      class: className,
+      section,
+      isActive: true
+    });
+
+    if (!isClassTeacher && !isSubjectTeacher) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized'
       });
     }
 
-    const results = await Result.find({
-      class: className,
-      section
-    })
+    const results = await Result.find({ class: className, section })
       .populate('student', 'rollNumber')
       .sort({ examDate: -1 });
 
@@ -863,10 +850,7 @@ exports.getResultsByClass = async (req, res) => {
     });
   } catch (error) {
     console.error('Get results error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -877,19 +861,23 @@ exports.updateMarks = async (req, res) => {
     const result = await Result.findById(req.params.id);
 
     if (!result) {
-      return res.status(404).json({
-        success: false,
-        message: 'Result not found'
-      });
+      return res.status(404).json({ success: false, message: 'Result not found' });
     }
 
-    const classData = await Class.findOne({
+    const isClassTeacher = await Class.findOne({
       className: result.class,
       section: result.section,
       classTeacher: req.user.id
     });
 
-    if (!classData) {
+    const isSubjectTeacher = await Subject.findOne({
+      teacher: req.user.id,
+      class: result.class,
+      section: result.section,
+      isActive: true
+    });
+
+    if (!isClassTeacher && !isSubjectTeacher) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to update these marks'
@@ -914,8 +902,7 @@ exports.updateMarks = async (req, res) => {
         totalObtained += Number(sub.marksObtained) || 0;
       });
 
-      const calcPercentage =
-        maxTotal > 0 ? (totalObtained / maxTotal) * 100 : 0;
+      const calcPercentage = maxTotal > 0 ? (totalObtained / maxTotal) * 100 : 0;
 
       let calcGrade = 'F';
       if (calcPercentage >= 90) calcGrade = 'A+';
@@ -945,10 +932,7 @@ exports.updateMarks = async (req, res) => {
     });
   } catch (error) {
     console.error('Update marks error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -957,44 +941,39 @@ exports.getStudentMarks = async (req, res) => {
     const { studentId } = req.params;
 
     const student = await Student.findById(studentId);
-
     if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found'
-      });
+      return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
-    const classData = await Class.findOne({
+    const isClassTeacher = await Class.findOne({
       className: student.class,
       section: student.section,
       classTeacher: req.user.id
     });
 
-    if (!classData) {
+    const isSubjectTeacher = await Subject.findOne({
+      teacher: req.user.id,
+      class: student.class,
+      section: student.section,
+      isActive: true
+    });
+
+    if (!isClassTeacher && !isSubjectTeacher) {
       return res.status(403).json({
         success: false,
         message: "You are not authorized to view this student's marks"
       });
     }
 
-    const results = await Result.find({
-      student: studentId
-    }).sort({ examDate: -1 });
+    const results = await Result.find({ student: studentId }).sort({ examDate: -1 });
 
     return res.status(200).json({
       success: true,
-      data: {
-        student,
-        results
-      }
+      data: { student, results }
     });
   } catch (error) {
     console.error('Get student marks error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -1015,13 +994,20 @@ exports.uploadStudyMaterial = async (req, res) => {
       return res.status(400).json({ success: false, message: 'File is required' });
     }
 
-    const classData = await Class.findOne({
+    const isClassTeacher = await Class.findOne({
       className,
       section,
       classTeacher: userId
     });
 
-    if (!classData) {
+    const isSubjectTeacher = await Subject.findOne({
+      teacher: userId,
+      class: className,
+      section,
+      isActive: true
+    });
+
+    if (!isClassTeacher && !isSubjectTeacher) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to upload materials for this class'
@@ -1075,16 +1061,10 @@ exports.getStudyMaterials = async (req, res) => {
       .populate('uploadedBy', 'name')
       .sort({ createdAt: -1 });
 
-    return res.status(200).json({
-      success: true,
-      data: materials
-    });
+    return res.status(200).json({ success: true, data: materials });
   } catch (error) {
     console.error('Get study materials error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -1110,10 +1090,7 @@ exports.deleteStudyMaterial = async (req, res) => {
     });
   } catch (error) {
     console.error('Delete study material error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -1123,14 +1100,7 @@ exports.deleteStudyMaterial = async (req, res) => {
 
 exports.updateTeacherProfile = async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      phone,
-      qualification,
-      specialization,
-      profilePicture
-    } = req.body;
+    const { name, email, phone, qualification, specialization, profilePicture } = req.body;
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -1163,16 +1133,11 @@ exports.changeTeacherPassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     const user = await User.findById(req.user.id);
-
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     const isPasswordValid = await user.comparePassword(currentPassword);
-
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -1181,7 +1146,6 @@ exports.changeTeacherPassword = async (req, res) => {
     }
 
     user.password = newPassword;
-
     await user.save();
 
     return res.status(200).json({
@@ -1214,16 +1178,10 @@ exports.getTeacherNotices = async (req, res) => {
       .populate('author', 'name')
       .sort({ priority: -1, createdAt: -1 });
 
-    return res.status(200).json({
-      success: true,
-      data: notices
-    });
+    return res.status(200).json({ success: true, data: notices });
   } catch (error) {
     console.error('Get teacher notices error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -1234,28 +1192,18 @@ exports.getTeacherNotices = async (req, res) => {
 exports.getTeacherTimetable = async (req, res) => {
   try {
     const { day } = req.query;
-
     const query = { 'periods.teacher': req.user.id };
-
-    if (day) {
-      query.day = day;
-    }
+    if (day) query.day = day;
 
     const timetable = await Timetable.find(query)
       .populate('periods.subject', 'name code')
       .populate('periods.teacher', 'name')
       .sort({ day: 1 });
 
-    return res.status(200).json({
-      success: true,
-      data: timetable
-    });
+    return res.status(200).json({ success: true, data: timetable });
   } catch (error) {
     console.error('Get teacher timetable error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -1267,10 +1215,7 @@ exports.getAvailableExams = async (req, res) => {
   try {
     const { class: className, section } = req.query;
 
-    const query = {
-      published: false,
-      teacher: req.user.id
-    };
+    const query = { published: false, teacher: req.user.id };
     if (className) query.class = className;
     if (section) query.section = section;
 
@@ -1293,48 +1238,7 @@ exports.getTeacherStudents = async (req, res) => {
   try {
     const { search } = req.query;
 
-    // ১. Class teacher হিসেবে assigned classes
-    const classTeacherClasses = await Class.find({
-      classTeacher: req.user.id,
-      isActive: true
-    }).populate('subjects.subject', 'name code');
-
-    // ২. Subject-এ teacher হিসেবে assigned classes
-    const subjectAssigned = await Subject.find({
-      teacher: req.user.id,
-      isActive: true
-    });
-
-    // Class+Section key map তৈরি
-    const classSectionMap = new Map();
-
-    classTeacherClasses.forEach(c => {
-      classSectionMap.set(`${c.className}|${c.section}`, {
-        className: c.className,
-        section: c.section,
-        classId: c._id,
-        subjects: c.subjects?.map(s => ({
-          name: s.subject?.name || s.name || 'N/A',
-          code: s.subject?.code || s.code || 'N/A'
-        })) || []
-      });
-    });
-
-    subjectAssigned.forEach(sub => {
-      const key = `${sub.class}|${sub.section}`;
-      if (!classSectionMap.has(key)) {
-        classSectionMap.set(key, {
-          className: sub.class,
-          section: sub.section,
-          classId: null,
-          subjects: []
-        });
-      }
-      const entry = classSectionMap.get(key);
-      entry.subjects.push({ name: sub.name, code: sub.code || '' });
-    });
-
-    const classSectionList = Array.from(classSectionMap.values());
+    const classSectionList = await buildClassSectionMap(req.user.id);
 
     if (classSectionList.length === 0) {
       return res.status(200).json({
@@ -1349,7 +1253,7 @@ exports.getTeacherStudents = async (req, res) => {
       });
     }
 
-    const orConditions = classSectionList.map(c => ({
+    const orConditions = classSectionList.map((c) => ({
       class: c.className,
       section: c.section
     }));
@@ -1374,9 +1278,9 @@ exports.getTeacherStudents = async (req, res) => {
       .populate('user', 'name email phone profilePicture username')
       .sort({ class: 1, section: 1, rollNumber: 1 });
 
-    const enhancedStudents = students.map(student => {
+    const enhancedStudents = students.map((student) => {
       const classData = classSectionList.find(
-        c => c.className === student.class && c.section === student.section
+        (c) => c.className === student.class && c.section === student.section
       );
 
       return {
@@ -1386,18 +1290,18 @@ exports.getTeacherStudents = async (req, res) => {
       };
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         students: enhancedStudents,
-        classes: classSectionList.map(c => ({
-          _id: c.classId || `${c.className}-${c.section}`,
+        classes: classSectionList.map((c) => ({
+          _id: c._id || `${c.className}-${c.section}`,
           className: c.className,
           section: c.section,
           studentCount: students.filter(
-            s => s.class === c.className && s.section === c.section
+            (s) => s.class === c.className && s.section === c.section
           ).length,
-          subjects: c.subjects.map(s => s.name)
+          subjects: c.subjects.map((s) => s.name)
         })),
         totalStudents: students.length,
         totalClasses: classSectionList.length
@@ -1405,7 +1309,7 @@ exports.getTeacherStudents = async (req, res) => {
     });
   } catch (error) {
     console.error('Get teacher students error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Server error'
     });
@@ -1424,13 +1328,20 @@ exports.publishResult = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Result not found' });
     }
 
-    const classData = await Class.findOne({
+    const isClassTeacher = await Class.findOne({
       className: result.class,
       section: result.section,
       classTeacher: req.user.id
     });
 
-    if (!classData) {
+    const isSubjectTeacher = await Subject.findOne({
+      teacher: req.user.id,
+      class: result.class,
+      section: result.section,
+      isActive: true
+    });
+
+    if (!isClassTeacher && !isSubjectTeacher) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to publish this result'

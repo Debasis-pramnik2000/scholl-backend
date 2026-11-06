@@ -10,8 +10,6 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 
-// ==================== SCHOOL INFO ====================
-
 const SCHOOL = {
   name: 'MANSINGHABERH BANISHREE VIDYANIKETAN (H.S.)',
   udise: 'UDISE: 19191304703',
@@ -19,8 +17,6 @@ const SCHOOL = {
   address2: 'Block: Khejuri-II, Dist: Purba Medinipur, West Bengal - 721431',
   principal: 'Sankhadip Maity'
 };
-
-// ==================== HELPER: DRAW SCHOOL HEADER ====================
 
 const drawSchoolHeader = (doc) => {
   doc.fontSize(16)
@@ -61,8 +57,6 @@ const drawSchoolHeader = (doc) => {
   doc.moveDown(0.4);
 };
 
-// ==================== HELPER: DRAW SCHOOL SEAL ====================
-
 const drawSchoolSeal = (doc, x, y) => {
   doc.save();
   doc.circle(x, y, 35).lineWidth(2).strokeColor('#1a3a6b').stroke();
@@ -85,8 +79,6 @@ const drawSchoolSeal = (doc, x, y) => {
 
   doc.restore();
 };
-
-// ==================== GENERATE REPORT CARD PDF ====================
 
 exports.generateReportCard = async (req, res) => {
   try {
@@ -127,7 +119,8 @@ exports.generateReportCard = async (req, res) => {
     const doc = new PDFDocument({
       margin: 40,
       size: 'A4',
-      layout: 'portrait'
+      layout: 'portrait',
+      bufferPages: true
     });
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -165,8 +158,8 @@ exports.generateReportCard = async (req, res) => {
 
     doc.y = infoTop + 65;
 
-    results.forEach((result) => {
-      if (doc.y > 660) {
+    results.forEach((result, index) => {
+      if (index > 0 && doc.y > 660) {
         doc.addPage();
         drawSchoolHeader(doc);
       }
@@ -252,7 +245,8 @@ exports.generateReportCard = async (req, res) => {
       doc.y = y + 40;
     });
 
-    if (doc.y > 640) {
+    // শেষ signature + seal — একবার
+    if (doc.y > 600) {
       doc.addPage();
       drawSchoolHeader(doc);
     }
@@ -285,8 +279,6 @@ exports.generateReportCard = async (req, res) => {
     }
   }
 };
-
-// ==================== GENERATE REPORT CARD EXCEL ====================
 
 exports.generateReportCardExcel = async (req, res) => {
   try {
@@ -385,8 +377,6 @@ exports.generateReportCardExcel = async (req, res) => {
   }
 };
 
-// ==================== GENERATE CLASS REPORT ====================
-
 exports.generateClassReport = async (req, res) => {
   try {
     const { classId } = req.params;
@@ -468,8 +458,6 @@ exports.generateClassReport = async (req, res) => {
     }
   }
 };
-
-// ==================== GENERATE ATTENDANCE REPORT ====================
 
 exports.generateAttendanceReport = async (req, res) => {
   try {
@@ -563,8 +551,6 @@ exports.generateAttendanceReport = async (req, res) => {
   }
 };
 
-// ==================== GENERATE TEACHER REPORT ====================
-
 exports.generateTeacherReport = async (req, res) => {
   try {
     const { teacherId } = req.params;
@@ -638,8 +624,6 @@ exports.generateTeacherReport = async (req, res) => {
     }
   }
 };
-
-// ==================== DOWNLOAD BULK REPORTS ====================
 
 exports.downloadBulkReport = async (req, res) => {
   try {

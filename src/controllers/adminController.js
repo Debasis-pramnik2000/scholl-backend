@@ -1821,19 +1821,14 @@ exports.getAttendanceReports = async (
 // @access  Private (Admin only)
 exports.createExam = async (req, res) => {
   try {
-    const {
-      class: className,
-      section,
-      examName,
-      examDate,
-      academicYear
-    } = req.body;
+    const { class: className, section, examName, examDate, teacher, academicYear } = req.body;
 
     const exam = await Result.create({
       class: className,
       section,
       examName,
       examDate,
+      teacher: teacher || null,
       academicYear,
       subjects: [],
       published: false
@@ -1844,13 +1839,34 @@ exports.createExam = async (req, res) => {
       message: 'Exam created successfully',
       data: exam
     });
-
   } catch (error) {
     console.error('Create exam error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Server error'
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
+  }
+};
+
+exports.updateExam = async (req, res) => {
+  try {
+    const { examName, examDate, teacher } = req.body;
+
+    const exam = await Result.findByIdAndUpdate(
+      req.params.id,
+      { examName, examDate, teacher: teacher || null },
+      { new: true, runValidators: true }
+    );
+
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Exam updated successfully',
+      data: exam
     });
+  } catch (error) {
+    console.error('Update exam error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 };
 
@@ -1896,50 +1912,29 @@ exports.publishResult = async (req, res) => {
 // @desc    Get all exams
 // @route   GET /api/admin/exams
 // @access  Private (Admin only)
-exports.getExams = async (
-  req,
-  res
-) => {
+exports.getExams = async (req, res) => {
   try {
-    const {
-      class: className,
-      section,
-      published
-    } = req.query;
+    const { class: className, section, published } = req.query;
 
     let query = {};
 
     if (className) {
-      query.class =
-        className;
+      query.class = className;
     }
 
     if (section) {
-      query.section =
-        section;
+      query.section = section;
     }
 
-    if (
-      published !==
-      undefined
-    ) {
-      query.published =
-        published === 'true';
+    if (published !== undefined) {
+      query.published = published === 'true';
     }
 
-    const exams =
-      await Result.find(query)
-        .populate(
-          'student',
-          'rollNumber'
-        )
-        .populate(
-          'publishedBy',
-          'name'
-        )
-        .sort({
-          examDate: -1
-        });
+    const exams = await Result.find(query)
+      .populate('student', 'rollNumber')
+      .populate('teacher', 'name email')
+      .populate('publishedBy', 'name')
+      .sort({ examDate: -1 });
 
     res.status(200).json({
       success: true,
@@ -1947,15 +1942,11 @@ exports.getExams = async (
     });
 
   } catch (error) {
-    console.error(
-      'Get exams error:',
-      error
-    );
+    console.error('Get exams error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };

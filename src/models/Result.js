@@ -19,6 +19,10 @@ const resultSchema = new mongoose.Schema({
     required: true
   },
   examDate: Date,
+  teacher: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   subjects: [{
     name: String,
     marksObtained: Number,

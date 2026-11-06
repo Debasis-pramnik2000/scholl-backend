@@ -1356,3 +1356,44 @@ exports.getTeacherStudents = async (req, res) => {
     });
   }
 };
+exports.publishResult = async (req, res) => {
+  try {
+    const result = await Result.findById(req.params.id);
+
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Result not found' });
+    }
+
+    const classData = await Class.findOne({
+      className: result.class,
+      section: result.section,
+      classTeacher: req.user.id
+    });
+
+    if (!classData) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to publish this result'
+      });
+    }
+
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 30);
+
+    result.published = true;
+    result.publishedBy = req.user.id;
+    result.publishedDate = new Date();
+    result.editDeadline = deadline;
+
+    await result.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Result published successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Publish result error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

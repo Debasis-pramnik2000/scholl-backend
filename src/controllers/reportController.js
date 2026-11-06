@@ -23,27 +23,27 @@ const SCHOOL = {
 // ==================== HELPER: DRAW SCHOOL HEADER ====================
 
 const drawSchoolHeader = (doc) => {
-  doc.fontSize(18)
+  doc.fontSize(16)
      .font('Helvetica-Bold')
      .fillColor('#1a3a6b')
      .text(SCHOOL.name, { align: 'center' });
 
-  doc.fontSize(9)
+  doc.fontSize(8)
      .font('Helvetica')
      .fillColor('#555555')
      .text(SCHOOL.udise, { align: 'center' });
 
-  doc.fontSize(9)
+  doc.fontSize(8)
      .font('Helvetica')
      .fillColor('#555555')
      .text(SCHOOL.address1, { align: 'center' });
 
-  doc.fontSize(9)
+  doc.fontSize(8)
      .font('Helvetica')
      .fillColor('#555555')
      .text(SCHOOL.address2, { align: 'center' });
 
-  doc.moveDown(0.5);
+  doc.moveDown(0.4);
 
   doc.lineWidth(2)
      .moveTo(50, doc.y)
@@ -51,54 +51,37 @@ const drawSchoolHeader = (doc) => {
      .strokeColor('#1a3a6b')
      .stroke();
 
-  doc.moveDown(0.5);
+  doc.moveDown(0.4);
 
-  doc.fontSize(14)
+  doc.fontSize(12)
      .font('Helvetica-Bold')
      .fillColor('#1a3a6b')
      .text('ACADEMIC REPORT CARD', { align: 'center' });
 
-  doc.moveDown(0.5);
+  doc.moveDown(0.4);
 };
 
 // ==================== HELPER: DRAW SCHOOL SEAL ====================
 
 const drawSchoolSeal = (doc, x, y) => {
   doc.save();
-  doc.circle(x, y, 40)
-     .lineWidth(2)
-     .strokeColor('#1a3a6b')
-     .stroke();
+  doc.circle(x, y, 35).lineWidth(2).strokeColor('#1a3a6b').stroke();
+  doc.circle(x, y, 29).lineWidth(1).strokeColor('#1a3a6b').stroke();
 
-  doc.circle(x, y, 34)
-     .lineWidth(1)
-     .strokeColor('#1a3a6b')
-     .stroke();
+  doc.fontSize(6).font('Helvetica-Bold').fillColor('#1a3a6b')
+     .text('SCHOOL', x - 35, y - 18, { width: 70, align: 'center' });
 
-  doc.fontSize(7)
-     .font('Helvetica-Bold')
-     .fillColor('#1a3a6b')
-     .text('SCHOOL', x - 40, y - 22, { width: 80, align: 'center' });
+  doc.fontSize(5).font('Helvetica').fillColor('#1a3a6b')
+     .text('MANSINGHABERH', x - 35, y - 8, { width: 70, align: 'center' });
 
-  doc.fontSize(6)
-     .font('Helvetica')
-     .fillColor('#1a3a6b')
-     .text('MANSINGHABERH', x - 40, y - 10, { width: 80, align: 'center' });
+  doc.fontSize(5).font('Helvetica').fillColor('#1a3a6b')
+     .text('BANISHREE', x - 35, y, { width: 70, align: 'center' });
 
-  doc.fontSize(6)
-     .font('Helvetica')
-     .fillColor('#1a3a6b')
-     .text('BANISHREE', x - 40, y - 1, { width: 80, align: 'center' });
+  doc.fontSize(5).font('Helvetica').fillColor('#1a3a6b')
+     .text('VIDYANIKETAN', x - 35, y + 8, { width: 70, align: 'center' });
 
-  doc.fontSize(6)
-     .font('Helvetica')
-     .fillColor('#1a3a6b')
-     .text('VIDYANIKETAN', x - 40, y + 8, { width: 80, align: 'center' });
-
-  doc.fontSize(6)
-     .font('Helvetica-Bold')
-     .fillColor('#1a3a6b')
-     .text('ESTD 1968', x - 40, y + 18, { width: 80, align: 'center' });
+  doc.fontSize(5).font('Helvetica-Bold').fillColor('#1a3a6b')
+     .text('ESTD 1968', x - 35, y + 16, { width: 70, align: 'center' });
 
   doc.restore();
 };
@@ -129,7 +112,7 @@ exports.generateReportCard = async (req, res) => {
       }
     }
 
-    let query = { student: studentId };
+    let query = { student: studentId, published: true };
     if (examName) query.examName = examName;
     if (academicYear) query.academicYear = academicYear;
 
@@ -137,12 +120,12 @@ exports.generateReportCard = async (req, res) => {
     if (results.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'No results found for this student'
+        message: 'No published results found for this student'
       });
     }
 
     const doc = new PDFDocument({
-      margin: 50,
+      margin: 40,
       size: 'A4',
       layout: 'portrait'
     });
@@ -152,91 +135,74 @@ exports.generateReportCard = async (req, res) => {
 
     doc.pipe(res);
 
-    results.forEach((result, index) => {
-      if (index > 0) {
+    drawSchoolHeader(doc);
+
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#1a3a6b')
+       .text(`Academic Year: ${student.academicYear || '2024-2025'}`, { align: 'center' });
+    doc.moveDown(0.3);
+
+    const infoTop = doc.y;
+    doc.rect(50, infoTop, 495, 55).lineWidth(1).strokeColor('#1a3a6b').stroke();
+
+    doc.fontSize(9).font('Helvetica').fillColor('#2c3e50');
+
+    doc.text('Student Name :', 60, infoTop + 7, { continued: true })
+       .font('Helvetica-Bold').text(` ${student.user?.name || 'N/A'}`);
+
+    doc.font('Helvetica').text('Roll Number :', 60, infoTop + 22, { continued: true })
+       .font('Helvetica-Bold').text(` ${student.rollNumber || 'N/A'}`);
+
+    doc.font('Helvetica').text('Class :', 60, infoTop + 37, { continued: true })
+       .font('Helvetica-Bold').text(` ${student.class} - ${student.section}`);
+
+    doc.font('Helvetica').text('Total Exams :', 320, infoTop + 7, { continued: true })
+       .font('Helvetica-Bold').text(` ${results.length}`);
+
+    doc.font('Helvetica').text('Issue Date :', 320, infoTop + 22, { continued: true })
+       .font('Helvetica-Bold').text(` ${results[0]?.publishedDate
+         ? new Date(results[0].publishedDate).toLocaleDateString('en-IN')
+         : new Date().toLocaleDateString('en-IN')}`);
+
+    doc.y = infoTop + 65;
+
+    results.forEach((result) => {
+      if (doc.y > 660) {
         doc.addPage();
+        drawSchoolHeader(doc);
       }
 
-      drawSchoolHeader(doc);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#1a3a6b')
+         .text(`${result.examName}`, { underline: true });
 
-      doc.fontSize(11)
-         .font('Helvetica-Bold')
-         .fillColor('#1a3a6b')
-         .text(`Academic Year: ${result.academicYear || student.academicYear || '2024-2025'}`, { align: 'center' });
+      doc.fontSize(8).font('Helvetica').fillColor('#7f8c8d')
+         .text(`Exam Date: ${new Date(result.examDate).toLocaleDateString('en-IN')}`);
+      doc.moveDown(0.3);
 
-      doc.moveDown(0.5);
-
-      // Student Info Box
-      const infoTop = doc.y;
-      doc.rect(50, infoTop, 495, 70)
-         .lineWidth(1)
-         .strokeColor('#1a3a6b')
-         .stroke();
-
-      doc.fontSize(10)
-         .font('Helvetica')
-         .fillColor('#2c3e50');
-
-      doc.text('Student Name :', 60, infoTop + 8, { continued: true })
-         .font('Helvetica-Bold')
-         .text(` ${student.user?.name || 'N/A'}`);
-
-      doc.font('Helvetica')
-         .text('Roll Number :', 60, infoTop + 24, { continued: true })
-         .font('Helvetica-Bold')
-         .text(` ${student.rollNumber || 'N/A'}`);
-
-      doc.font('Helvetica')
-         .text('Class         :', 60, infoTop + 40, { continued: true })
-         .font('Helvetica-Bold')
-         .text(` ${student.class} - ${student.section}`);
-
-      doc.font('Helvetica')
-         .text('Exam Name  :', 320, infoTop + 8, { continued: true })
-         .font('Helvetica-Bold')
-         .text(` ${result.examName}`);
-
-      doc.font('Helvetica')
-         .text('Exam Date   :', 320, infoTop + 24, { continued: true })
-         .font('Helvetica-Bold')
-         .text(` ${new Date(result.examDate).toLocaleDateString('en-IN')}`);
-
-      doc.moveDown(4);
-
-      // Subject Table
       const tableTop = doc.y;
       const tableX = 50;
       const colWidths = [40, 180, 90, 90, 95];
       const tableWidth = colWidths.reduce((a, b) => a + b, 0);
 
-      // Header
-      doc.rect(tableX, tableTop, tableWidth, 24)
-         .fillColor('#1a3a6b')
-         .fill();
+      doc.rect(tableX, tableTop, tableWidth, 20).fillColor('#1a3a6b').fill();
 
-      doc.fillColor('#ffffff')
-         .fontSize(10)
-         .font('Helvetica-Bold');
-
+      doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
       let hx = tableX;
-      const headers = ['SL', 'Subject', 'Full Marks', 'Obtained', 'Grade'];
-      headers.forEach((h, i) => {
-        doc.text(h, hx + 5, tableTop + 7, { width: colWidths[i] - 10, align: i === 1 ? 'left' : 'center' });
+      ['SL', 'Subject', 'Full Marks', 'Obtained', 'Grade'].forEach((h, i) => {
+        doc.text(h, hx + 5, tableTop + 5, {
+          width: colWidths[i] - 10,
+          align: i === 1 ? 'left' : 'center'
+        });
         hx += colWidths[i];
       });
 
-      let y = tableTop + 24;
+      let y = tableTop + 20;
 
       result.subjects.forEach((subject, idx) => {
         if (idx % 2 === 0) {
-          doc.rect(tableX, y, tableWidth, 22)
-             .fillColor('#f0f4fa')
-             .fill();
+          doc.rect(tableX, y, tableWidth, 18).fillColor('#f0f4fa').fill();
         }
 
-        doc.fillColor('#2c3e50')
-           .fontSize(9)
-           .font('Helvetica');
+        doc.fillColor('#2c3e50').fontSize(8).font('Helvetica');
 
         let cx = tableX;
         const rowData = [
@@ -249,89 +215,64 @@ exports.generateReportCard = async (req, res) => {
 
         rowData.forEach((val, i) => {
           if (i === 4) {
-            const gradeColor =
-              subject.grade === 'A+' || subject.grade === 'A' ? '#1e8449' :
-              subject.grade === 'B+' || subject.grade === 'B' ? '#2874a6' :
-              subject.grade === 'C+' || subject.grade === 'C' ? '#b9770e' :
-              subject.grade === 'D' ? '#ca6f1e' : '#c0392b';
-            doc.fillColor(gradeColor).font('Helvetica-Bold');
+            const gc = subject.grade === 'A+' || subject.grade === 'A' ? '#1e8449' :
+                       subject.grade === 'B+' || subject.grade === 'B' ? '#2874a6' :
+                       subject.grade === 'C+' || subject.grade === 'C' ? '#b9770e' :
+                       subject.grade === 'D' ? '#ca6f1e' : '#c0392b';
+            doc.fillColor(gc).font('Helvetica-Bold');
           } else {
             doc.fillColor('#2c3e50').font('Helvetica');
           }
-          doc.text(val, cx + 5, y + 6, { width: colWidths[i] - 10, align: i === 1 ? 'left' : 'center' });
+          doc.text(val, cx + 5, y + 5, {
+            width: colWidths[i] - 10,
+            align: i === 1 ? 'left' : 'center'
+          });
           cx += colWidths[i];
         });
 
-        y += 22;
+        y += 18;
       });
 
-      // Table border
       doc.rect(tableX, tableTop, tableWidth, y - tableTop)
-         .lineWidth(1)
-         .strokeColor('#1a3a6b')
-         .stroke();
+         .lineWidth(1).strokeColor('#1a3a6b').stroke();
 
-      y += 10;
+      y += 5;
 
-      // Summary Box
       const passFail = (result.percentage || 0) >= 33 ? 'PASS' : 'FAIL';
       const passColor = passFail === 'PASS' ? '#1e8449' : '#c0392b';
 
-      doc.rect(50, y, 495, 70)
-         .lineWidth(1)
-         .strokeColor('#1a3a6b')
-         .stroke();
+      doc.rect(50, y, 495, 30).lineWidth(1).strokeColor('#1a3a6b').stroke();
 
-      doc.fontSize(11)
-         .font('Helvetica-Bold')
-         .fillColor('#1a3a6b');
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#1a3a6b');
+      doc.text(`Total: ${result.totalMarks || 0}`, 60, y + 5);
+      doc.text(`Percentage: ${result.percentage || 0}%`, 60, y + 17);
+      doc.text(`Grade: ${result.grade || 'N/A'}`, 220, y + 5);
+      doc.fillColor(passColor).text(`Result: ${passFail}`, 220, y + 17);
 
-      doc.text(`Total Marks: ${result.totalMarks || 0}`, 60, y + 10);
-      doc.text(`Percentage: ${result.percentage || 0}%`, 60, y + 30);
-
-      doc.text(`Grade: ${result.grade || 'N/A'}`, 300, y + 10);
-      doc.fillColor(passColor)
-         .text(`Result: ${passFail}`, 300, y + 30);
-
-      y += 85;
-
-      // Signatures
-      doc.fillColor('#1a3a6b');
-      drawSchoolSeal(doc, 120, y + 30);
-
-      doc.fontSize(10)
-         .font('Helvetica-Bold')
-         .fillColor('#1a3a6b')
-         .text(SCHOOL.principal, 300, y + 20, { width: 220, align: 'center' });
-
-      doc.fontSize(9)
-         .font('Helvetica')
-         .fillColor('#555555')
-         .text('Principal', 300, y + 36, { width: 220, align: 'center' });
-
-      doc.fontSize(9)
-         .font('Helvetica')
-         .fillColor('#555555')
-         .text(
-           `Issue Date: ${result.publishedDate
-             ? new Date(result.publishedDate).toLocaleDateString('en-IN')
-             : new Date().toLocaleDateString('en-IN')}`,
-           50,
-           y + 90,
-           { align: 'center', width: 495 }
-         );
-
-      // Footer
-      doc.fontSize(7)
-         .font('Helvetica')
-         .fillColor('#999999')
-         .text(
-           'This is a system generated report card.',
-           50,
-           doc.page.height - 40,
-           { align: 'center', width: 495 }
-         );
+      doc.y = y + 40;
     });
+
+    if (doc.y > 640) {
+      doc.addPage();
+      drawSchoolHeader(doc);
+    }
+
+    const sigY = doc.y + 10;
+    drawSchoolSeal(doc, 120, sigY + 25);
+
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#1a3a6b')
+       .text(SCHOOL.principal, 300, sigY + 15, { width: 220, align: 'center' });
+
+    doc.fontSize(9).font('Helvetica').fillColor('#555')
+       .text('Principal', 300, sigY + 31, { width: 220, align: 'center' });
+
+    doc.fontSize(7).font('Helvetica').fillColor('#999999')
+       .text(
+         'This is a system generated report card.',
+         50,
+         doc.page.height - 30,
+         { align: 'center', width: 495 }
+       );
 
     doc.end();
   } catch (error) {
@@ -370,11 +311,11 @@ exports.generateReportCardExcel = async (req, res) => {
       }
     }
 
-    const results = await Result.find({ student: studentId }).sort({ examDate: -1 });
+    const results = await Result.find({ student: studentId, published: true }).sort({ examDate: -1 });
     if (results.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'No results found for this student'
+        message: 'No published results found for this student'
       });
     }
 
@@ -733,7 +674,7 @@ exports.downloadBulkReport = async (req, res) => {
 
     for (let student of students) {
       const pdfPath = path.join(tempDir, `${student.rollNumber}-report-card.pdf`);
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({ margin: 40 });
       const writeStream = fs.createWriteStream(pdfPath);
       doc.pipe(writeStream);
 
@@ -744,7 +685,7 @@ exports.downloadBulkReport = async (req, res) => {
       doc.text(`Class: ${student.class}-${student.section}`);
       doc.moveDown();
 
-      let query = { student: student._id };
+      let query = { student: student._id, published: true };
       if (examName) query.examName = examName;
 
       const results = await Result.find(query).sort({ examDate: -1 });

@@ -435,10 +435,12 @@ exports.generateReportCardExcel = async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Excel generation error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate Excel report'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate Excel report'
+      });
+    }
   }
 };
 
@@ -517,10 +519,12 @@ exports.generateClassReport = async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Class report error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate class report'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate class report'
+      });
+    }
   }
 };
 
@@ -609,10 +613,12 @@ exports.generateAttendanceReport = async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Attendance report error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate attendance report'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate attendance report'
+      });
+    }
   }
 };
 
@@ -683,10 +689,12 @@ exports.generateTeacherReport = async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Teacher report error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate teacher report'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate teacher report'
+      });
+    }
   }
 };
 
@@ -786,9 +794,11 @@ exports.downloadBulkReport = async (req, res) => {
 
   } catch (error) {
     console.error('Bulk download error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate bulk reports'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate bulk reports'
+      });
+    }
   }
 };

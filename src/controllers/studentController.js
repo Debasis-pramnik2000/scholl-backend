@@ -4,6 +4,7 @@ const Attendance = require('../models/Attendance');
 const Timetable = require('../models/Timetable');
 const Result = require('../models/Result');
 const Notice = require('../models/Notice');
+const StudyMaterial = require('../models/StudyMaterial');
 
 // @desc    Get student dashboard data
 // @route   GET /api/student/dashboard
@@ -57,10 +58,10 @@ exports.getDashboard = async (req, res) => {
 
     // Get upcoming exams
     const exams = await Result.find({
-  class: student.class,
-  section: student.section,
-  published: false
-})
+      class: student.class,
+      section: student.section,
+      published: false
+    });
 
     res.status(200).json({
       success: true,
@@ -287,14 +288,12 @@ exports.getResults = async (req, res) => {
     });
   }
 };
+
 // @desc    Get study materials for student
 // @route   GET /api/student/materials
 // @access  Private (Student only)
 exports.getStudentMaterials = async (req, res) => {
   try {
-    const Student = require('../models/Student');
-    const StudyMaterial = require('../models/StudyMaterial');
-    
     // Get student's class and section
     const student = await Student.findOne({ user: req.user.id });
     if (!student) {
@@ -325,6 +324,7 @@ exports.getStudentMaterials = async (req, res) => {
     });
   }
 };
+
 // @desc    Get exam schedule
 // @route   GET /api/student/exams
 // @access  Private (Student only)

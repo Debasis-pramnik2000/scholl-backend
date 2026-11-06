@@ -478,3 +478,89 @@ exports.getTimetableReport = async (req, res) => {
     });
   }
 };
+exports.getAssignedClasses = async (req, res) => {
+  try {
+    const teacher = await Teacher.findOne({ user: req.user.id }).populate({
+      path: 'subjects.subjectId',
+      select: 'name code description class section academicYear'
+    });
+
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: 'Teacher profile not found' });
+    }
+
+    const classTeacherClasses = await Class.find({
+      classTeacher: req.user.id,
+      isActive: true
+    })
+      .populate('classTeacher', 'name email')
+      .populate('subjects.subject', 'name code description class section')
+      .populate('subjects.teacher', 'name email');
+
+    const subjectAssigned = await Subject.find({
+      teacher: req.user.id,
+      isActive: true
+    });
+
+    const classSectionMap = new Map();
+
+    classTeacherClasses.forEach(c => {
+      classSectionMap.set(`${c.className}|${c.section}`, {
+        _id: c._id,
+        className: c.className,
+        section: c.section,
+        academicYear: c.academicYear,
+        classTeacher: c.classTeacher,
+        subjects: c.subjects?.map(s => ({
+          _id: s.subject?._id,
+          name: s.subject?.name || s.name || 'Subject',
+          code: s.subject?.code || s.code || ''
+        })) || []
+      });
+    });
+
+    subjectAssigned.forEach(sub => {
+      const key = `${sub.class}|${sub.section}`;
+      if (!classSectionMap.has(key)) {
+        classSectionMap.set(key, {
+          _id: null,
+          className: sub.class,
+          section: sub.section,
+          academicYear: sub.academicYear,
+          classTeacher: null,
+          subjects: []
+        });
+      }
+      const entry = classSectionMap.get(key);
+      entry.subjects.push({ _id: sub._id, name: sub.name, code: sub.code || '' });
+    });
+
+    const classSectionList = Array.from(classSectionMap.values());
+
+    const classesWithCount = await Promise.all(
+      classSectionList.map(async (cls) => {
+        const studentCount = await Student.countDocuments({
+          class: cls.className,
+          section: cls.section
+        });
+
+        return {
+          ...cls,
+          studentCount,
+          subjectCount: cls.subjects.length
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: classesWithCount
+    });
+  } catch (error) {
+    console.error('Get assigned classes error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
+    });
+  }
+};

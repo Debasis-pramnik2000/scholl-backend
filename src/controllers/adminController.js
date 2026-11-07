@@ -1815,18 +1815,101 @@ exports.getAttendanceReports = async (
 // @access  Private (Admin only)
 exports.createExam = async (req, res) => {
   try {
-    const { class: className, section, examName, examDate, teacher, academicYear } = req.body;
+    const {
+      class: className,
+      section,
+      subject,
+      examName,
+      examDate,
+      academicYear
+    } = req.body;
 
-    const exam = await Result.create({
+    if (!className || !section || !examName || !subject) {
+      return res.status(400).json({
+        success: false,
+        message: 'Class, section, exam name and subject are required'
+      });
+    }
+
+    const finalYear = academicYear || new Date().getFullYear().toString();
+
+    // Class না থাকলে auto-create
+    let classData = await Class.findOne({
+      className,
+      section,
+      academicYear: finalYear
+    });
+
+    if (!classData) {
+      classData = await Class.create({
+        className,
+        section,
+        academicYear: finalYear,
+        isActive: true
+      });
+    }
+
+    // Subject-এ teacher আছে?
+    const subjectDoc = await Subject.findOne({
+      name: subject,
+      class: className,
+      section,
+      academicYear: finalYear,
+      isActive: true
+    });
+
+    let exam = await Result.findOne({
       class: className,
       section,
       examName,
-      examDate,
-      teacher: teacher || null,
-      academicYear,
-      subjects: [],
-      published: false
+      academicYear: finalYear
     });
+
+    if (exam) {
+      // একই exam-এ subject আগে থেকে আছে?
+      const exists = exam.subjects.find(s => s.name === subject);
+      if (exists) {
+        return res.status(400).json({
+          success: false,
+          message: `${subject} already added to this exam`
+        });
+      }
+
+      exam.subjects.push({
+        name: subject,
+        examDate: examDate ? new Date(examDate) : new Date(),
+        marksObtained: 0,
+        totalMarks: subjectDoc?.totalMarks || 100,
+        grade: '',
+        remarks: '',
+        teacher: subjectDoc?.teacher || null,
+        published: false
+      });
+
+      if (examDate && !exam.examDate) {
+        exam.examDate = new Date(examDate);
+      }
+
+      await exam.save();
+    } else {
+      exam = await Result.create({
+        class: className,
+        section,
+        examName,
+        examDate: examDate ? new Date(examDate) : new Date(),
+        academicYear: finalYear,
+        subjects: [{
+          name: subject,
+          examDate: examDate ? new Date(examDate) : new Date(),
+          marksObtained: 0,
+          totalMarks: subjectDoc?.totalMarks || 100,
+          grade: '',
+          remarks: '',
+          teacher: subjectDoc?.teacher || null,
+          published: false
+        }]
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -1835,7 +1918,10 @@ exports.createExam = async (req, res) => {
     });
   } catch (error) {
     console.error('Create exam error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error' });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
+    });
   }
 };
 

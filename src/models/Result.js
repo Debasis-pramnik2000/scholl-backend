@@ -6,37 +6,20 @@ const resultSchema = new mongoose.Schema({
     ref: 'Student',
     required: false
   },
-  class: {
-    type: String,
-    required: true
-  },
-  section: {
-    type: String,
-    required: true
-  },
-  examName: {
-    type: String,
-    required: true
-  },
+  class: { type: String, required: true },
+  section: { type: String, required: true },
+  examName: { type: String, required: true },
   examDate: Date,
   subjects: [{
     name: String,
+    examDate: Date,
     marksObtained: Number,
     totalMarks: Number,
     grade: String,
     remarks: String,
-    teacher: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    published: {
-      type: Boolean,
-      default: false
-    },
-    publishedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
+    teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    published: { type: Boolean, default: false },
+    publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     publishedDate: Date,
     editDeadline: Date
   }],
@@ -44,10 +27,7 @@ const resultSchema = new mongoose.Schema({
   percentage: Number,
   grade: String,
   rank: Number,
-  academicYear: {
-    type: String,
-    required: true
-  }
+  academicYear: { type: String, required: true }
 }, {
   timestamps: true
 });

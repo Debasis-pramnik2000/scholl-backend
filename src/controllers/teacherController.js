@@ -637,117 +637,7 @@ const calculateGrade = (marks, total) => {
   return 'F';
 };
 
-exports.enterMarks = async (req, res) => {
-  try {
-    const {
-      studentId,
-      class: className,
-      section,
-      examName,
-      examDate,
-      subjects,
-      academicYear
-    } = req.body;
 
-    const student = await Student.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
-    }
-
-    const finalClass = className || student.class;
-    const finalSection = section || student.section;
-    const finalYear = academicYear || new Date().getFullYear().toString();
-
-    const teacherSubjects = await Subject.find({
-      teacher: req.user.id,
-      class: finalClass,
-      section: finalSection,
-      isActive: true
-    }).select('_id name code');
-
-    if (teacherSubjects.length === 0) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not assigned to any subject in this class'
-      });
-    }
-
-    const teacherSubjectNames = teacherSubjects.map(s => s.name);
-    const incomingSubjects = (subjects || []).filter(s =>
-      teacherSubjectNames.includes(s.name)
-    );
-
-    if (incomingSubjects.length === 0) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only enter marks for your assigned subjects'
-      });
-    }
-
-    const exam = await Result.findOne({
-      class: finalClass,
-      section: finalSection,
-      examName,
-      academicYear: finalYear
-    });
-
-    if (!exam) {
-      return res.status(404).json({
-        success: false,
-        message: 'Exam not found. Please ask admin to create this exam.'
-      });
-    }
-
-    const normalizedSubjects = incomingSubjects.map(s => ({
-      name: s.name,
-      marksObtained: Number(s.marksObtained) || 0,
-      totalMarks: Number(s.totalMarks) || 100,
-      grade: calculateGrade(Number(s.marksObtained) || 0, Number(s.totalMarks) || 100),
-      remarks: s.remarks || '',
-      teacher: req.user.id,
-      published: false
-    }));
-
-    let result = await Result.findOne({
-      student: studentId,
-      examName,
-      class: finalClass,
-      section: finalSection,
-      academicYear: finalYear
-    });
-
-    if (result) {
-      const existingOthers = (result.subjects || []).filter(
-        s => !teacherSubjectNames.includes(s.name)
-      );
-      result.subjects = [...existingOthers, ...normalizedSubjects];
-    } else {
-      result = new Result({
-        student: studentId,
-        class: finalClass,
-        section: finalSection,
-        examName,
-        examDate: examDate || exam.examDate || new Date(),
-        subjects: normalizedSubjects,
-        academicYear: finalYear
-      });
-    }
-
-    await result.save();
-
-    return res.status(201).json({
-      success: true,
-      message: 'Marks entered successfully',
-      data: result
-    });
-  } catch (error) {
-    console.error('Enter marks error:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Server error'
-    });
-  }
-};
 
 exports.getClassMarks = async (req, res) => {
   try {
@@ -1161,33 +1051,170 @@ exports.getTeacherTimetable = async (req, res) => {
 // AVAILABLE EXAMS (for teacher)
 // ======================================================
 
+exports.enterMarks = async (req, res) => {
+  try {
+    const {
+      studentId,
+      class: className,
+      section,
+      examName,
+      examDate,
+      subjects,
+      academicYear
+    } = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const finalClass = className || student.class;
+    const finalSection = section || student.section;
+    const finalYear = academicYear || new Date().getFullYear().toString();
+
+    const teacherSubjects = await Subject.find({
+      teacher: req.user.id,
+      class: finalClass,
+      section: finalSection,
+      isActive: true
+    }).select('_id name code');
+
+    if (teacherSubjects.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned to any subject in this class'
+      });
+    }
+
+    const teacherSubjectNames = teacherSubjects.map(s => s.name);
+    const incomingSubjects = (subjects || []).filter(s =>
+      teacherSubjectNames.includes(s.name)
+    );
+
+    if (incomingSubjects.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only enter marks for your assigned subjects'
+      });
+    }
+
+    const exam = await Result.findOne({
+      class: finalClass,
+      section: finalSection,
+      examName,
+      academicYear: finalYear
+    });
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: 'Exam not found. Please ask admin to create this exam.'
+      });
+    }
+
+    const normalizedSubjects = incomingSubjects.map(s => {
+      const existingExamSubject = (exam.subjects || []).find(
+        es => es.name === s.name
+      );
+      return {
+        name: s.name,
+        examDate: s.examDate
+          ? new Date(s.examDate)
+          : existingExamSubject?.examDate || exam.examDate || new Date(),
+        marksObtained: Number(s.marksObtained) || 0,
+        totalMarks: Number(s.totalMarks) || 100,
+        grade: calculateGrade(Number(s.marksObtained) || 0, Number(s.totalMarks) || 100),
+        remarks: s.remarks || '',
+        teacher: req.user.id,
+        published: false
+      };
+    });
+
+    let result = await Result.findOne({
+      student: studentId,
+      examName,
+      class: finalClass,
+      section: finalSection,
+      academicYear: finalYear
+    });
+
+    if (result) {
+      const existingOthers = (result.subjects || []).filter(
+        s => !teacherSubjectNames.includes(s.name)
+      );
+      result.subjects = [...existingOthers, ...normalizedSubjects];
+    } else {
+      result = new Result({
+        student: studentId,
+        class: finalClass,
+        section: finalSection,
+        examName,
+        examDate: examDate || exam.examDate || new Date(),
+        subjects: normalizedSubjects,
+        academicYear: finalYear
+      });
+    }
+
+    await result.save();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Marks entered successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Enter marks error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
+    });
+  }
+};
+
 exports.getAvailableExams = async (req, res) => {
   try {
     const { class: className, section } = req.query;
-    const query = {};
-    if (className) query.class = className;
-    if (section) query.section = section;
 
-    const exams = await Result.find(query)
-      .select('examName examDate class section academicYear')
+    if (!className || !section) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const teacherSubjects = await Subject.find({
+      teacher: req.user.id,
+      class: className,
+      section,
+      isActive: true
+    }).select('name');
+
+    if (teacherSubjects.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const teacherSubjectNames = teacherSubjects.map(s => s.name);
+
+    const exams = await Result.find({ class: className, section })
+      .select('examName examDate class section academicYear subjects')
       .sort({ examDate: -1 });
 
-    const unique = new Map();
-    exams.forEach(e => {
-      const key = `${e.examName}|${e.class}|${e.section}|${e.academicYear}`;
-      if (!unique.has(key)) unique.set(key, e);
-    });
+    const filtered = exams
+      .map(ex => {
+        const obj = ex.toObject();
+        obj.subjects = (obj.subjects || []).filter(s =>
+          teacherSubjectNames.includes(s.name)
+        );
+        return obj;
+      })
+      .filter(ex => ex.subjects.length > 0);
 
     return res.status(200).json({
       success: true,
-      data: Array.from(unique.values())
+      data: filtered
     });
   } catch (error) {
     console.error('Get available exams error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-
 // ======================================================
 // STUDENTS
 // ======================================================

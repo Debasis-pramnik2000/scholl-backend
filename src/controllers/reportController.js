@@ -104,11 +104,50 @@ exports.generateReportCard = async (req, res) => {
       }
     }
 
-    let query = { student: studentId, published: true };
+    let query = { student: studentId };
     if (examName) query.examName = examName;
     if (academicYear) query.academicYear = academicYear;
 
-    const results = await Result.find(query).sort({ examDate: -1 });
+    const rawResults = await Result.find(query).sort({ examDate: -1 });
+
+    const results = rawResults
+      .map(r => {
+        const obj = r.toObject();
+        obj.subjects = (obj.subjects || []).filter(s => s.published === true);
+
+        let totalObtained = 0;
+        let totalMax = 0;
+        obj.subjects.forEach(s => {
+          totalObtained += Number(s.marksObtained) || 0;
+          totalMax += Number(s.totalMarks) || 100;
+        });
+        obj.totalMarks = totalObtained;
+        obj.percentage = totalMax > 0
+          ? parseFloat(((totalObtained / totalMax) * 100).toFixed(2))
+          : 0;
+
+        let grade = 'F';
+        const p = obj.percentage;
+        if (p >= 90) grade = 'A+';
+        else if (p >= 80) grade = 'A';
+        else if (p >= 70) grade = 'B+';
+        else if (p >= 60) grade = 'B';
+        else if (p >= 50) grade = 'C+';
+        else if (p >= 40) grade = 'C';
+        else if (p >= 33) grade = 'D';
+        obj.grade = grade;
+
+        const pubDates = obj.subjects
+          .filter(s => s.publishedDate)
+          .map(s => new Date(s.publishedDate));
+        obj.latestPublishedDate = pubDates.length > 0
+          ? new Date(Math.max(...pubDates))
+          : null;
+
+        return obj;
+      })
+      .filter(r => r.subjects.length > 0);
+
     if (results.length === 0) {
       return res.status(404).json({
         success: false,
@@ -152,8 +191,8 @@ exports.generateReportCard = async (req, res) => {
        .font('Helvetica-Bold').text(` ${results.length}`);
 
     doc.font('Helvetica').text('Issue Date :', 320, infoTop + 22, { continued: true })
-       .font('Helvetica-Bold').text(` ${results[0]?.publishedDate
-         ? new Date(results[0].publishedDate).toLocaleDateString('en-IN')
+       .font('Helvetica-Bold').text(` ${results[0]?.latestPublishedDate
+         ? new Date(results[0].latestPublishedDate).toLocaleDateString('en-IN')
          : new Date().toLocaleDateString('en-IN')}`);
 
     doc.y = infoTop + 65;
@@ -245,7 +284,6 @@ exports.generateReportCard = async (req, res) => {
       doc.y = y + 40;
     });
 
-    // শেষ signature + seal — একবার
     if (doc.y > 600) {
       doc.addPage();
       drawSchoolHeader(doc);
@@ -286,10 +324,7 @@ exports.generateReportCardExcel = async (req, res) => {
 
     const student = await Student.findById(studentId).populate('user', 'name email');
     if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found'
-      });
+      return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
     if (req.user.role === 'parent') {
@@ -303,7 +338,16 @@ exports.generateReportCardExcel = async (req, res) => {
       }
     }
 
-    const results = await Result.find({ student: studentId, published: true }).sort({ examDate: -1 });
+    const rawResults = await Result.find({ student: studentId }).sort({ examDate: -1 });
+
+    const results = rawResults
+      .map(r => {
+        const obj = r.toObject();
+        obj.subjects = (obj.subjects || []).filter(s => s.published === true);
+        return obj;
+      })
+      .filter(r => r.subjects.length > 0);
+
     if (results.length === 0) {
       return res.status(404).json({
         success: false,
@@ -346,14 +390,17 @@ exports.generateReportCardExcel = async (req, res) => {
         ]);
       });
 
+      let t = 0, m = 0;
+      result.subjects.forEach(s => {
+        t += Number(s.marksObtained) || 0;
+        m += Number(s.totalMarks) || 100;
+      });
+      const pct = m > 0 ? ((t / m) * 100).toFixed(2) : 0;
+
       resultsSheet.addRow([]);
-      resultsSheet.addRow(['Total:', result.totalMarks]);
-      resultsSheet.addRow(['Percentage:', `${result.percentage}%`]);
-      resultsSheet.addRow(['Grade:', result.grade]);
-      resultsSheet.addRow(['Result:', (result.percentage || 0) >= 33 ? 'PASS' : 'FAIL']);
-      resultsSheet.addRow(['Issue Date:', result.publishedDate
-        ? new Date(result.publishedDate).toLocaleDateString()
-        : new Date().toLocaleDateString()]);
+      resultsSheet.addRow(['Total:', t]);
+      resultsSheet.addRow(['Percentage:', `${pct}%`]);
+      resultsSheet.addRow(['Result:', parseFloat(pct) >= 33 ? 'PASS' : 'FAIL']);
       resultsSheet.addRow(['-------------------']);
       resultsSheet.addRow([]);
     });

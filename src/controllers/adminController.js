@@ -256,8 +256,10 @@ exports.createStudent = async (req, res) => {
       gender
     } = req.body;
 
-    const existingUser = await User.findOne({ username });
+    const finalSection = section || 'A';
+    const finalYear = academicYear || new Date().getFullYear().toString();
 
+    const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -266,24 +268,37 @@ exports.createStudent = async (req, res) => {
     }
 
     const existingEmail = await User.findOne({ email });
-
     if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message:
-          'Email already registered. Please use a different email.'
+        message: 'Email already registered. Please use a different email.'
       });
     }
 
-    const existingStudent = await Student.findOne({
-      rollNumber
-    });
-
+    const existingStudent = await Student.findOne({ rollNumber });
     if (existingStudent) {
       return res.status(400).json({
         success: false,
         message: 'Roll number already exists'
       });
+    }
+
+    // ✅ Class না থাকলে auto-create
+    let classData = await Class.findOne({
+      className: studentClass,
+      section: finalSection,
+      academicYear: finalYear
+    });
+
+    if (!classData) {
+      classData = await Class.create({
+        className: studentClass,
+        section: finalSection,
+        academicYear: finalYear,
+        isActive: true,
+        createdBy: req.user.id
+      });
+      console.log(`✅ Auto-created class: ${studentClass}-${finalSection} (${finalYear})`);
     }
 
     const user = await User.create({
@@ -296,20 +311,14 @@ exports.createStudent = async (req, res) => {
       isActive: true
     });
 
-    // ✅ FIX: wrap Student.create in try/catch and roll back the User
-    // if it fails, so a failed student add doesn't leave an orphaned
-    // user blocking future retries with "Username already exists".
     let student;
-
     try {
       student = await Student.create({
         user: user._id,
         rollNumber,
         class: studentClass,
-        section: section || 'A',
-        academicYear:
-          academicYear ||
-          new Date().getFullYear().toString(),
+        section: finalSection,
+        academicYear: finalYear,
         parentName: parentName || '',
         parentPhone: parentPhone || '',
         address: address || '',
@@ -321,21 +330,13 @@ exports.createStudent = async (req, res) => {
       throw studentError;
     }
 
-    await Class.findOneAndUpdate(
-      {
-        className: studentClass,
-        section: section || 'A'
-      },
-      {
-        $inc: {
-          totalStudents: 1
-        }
-      }
+    await Class.findByIdAndUpdate(
+      classData._id,
+      { $inc: { totalStudents: 1 } }
     );
 
-    const populatedStudent =
-      await Student.findById(student._id)
-        .populate('user', '-password');
+    const populatedStudent = await Student.findById(student._id)
+      .populate('user', '-password');
 
     res.status(201).json({
       success: true,
@@ -346,22 +347,15 @@ exports.createStudent = async (req, res) => {
     console.error('Create student error:', error);
 
     if (error.code === 11000) {
-      const field =
-        Object.keys(error.keyPattern)[0];
-
+      const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
         success: false,
-        message:
-          `${field} already exists. Please use a different ${field}.`
+        message: `${field} already exists. Please use a different ${field}.`
       });
     }
 
     if (error.name === 'ValidationError') {
-      const messages =
-        Object.values(error.errors).map(
-          err => err.message
-        );
-
+      const messages = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         success: false,
         message: messages.join('. ')
@@ -2222,10 +2216,7 @@ exports.getSubjects = async (
 // @desc    Create subject
 // @route   POST /api/admin/subjects
 // @access  Private (Admin only)
-exports.createSubject = async (
-  req,
-  res
-) => {
+exports.createSubject = async (req, res) => {
   try {
     const {
       name,
@@ -2241,88 +2232,93 @@ exports.createSubject = async (
       practicalMarks
     } = req.body;
 
-    const existingSubject =
-      await Subject.findOne({
-        name,
-        class: className,
-        section:
-          section || 'A',
-        academicYear
-      });
+    const finalSection = section || 'A';
+    const finalYear = academicYear || new Date().getFullYear().toString();
+
+    const existingSubject = await Subject.findOne({
+      name,
+      class: className,
+      section: finalSection,
+      academicYear: finalYear
+    });
 
     if (existingSubject) {
       return res.status(400).json({
         success: false,
-        message:
-          'Subject already exists in this class/section'
+        message: 'Subject already exists in this class/section'
       });
     }
 
-    const subject =
-      await Subject.create({
-        name,
-        code: code
-          ? code.toUpperCase()
-          : '',
-        description:
-          description || '',
-        class: className,
-        section:
-          section || 'A',
-        teacher:
-          teacher || null,
-        academicYear:
-          academicYear ||
-          new Date()
-            .getFullYear()
-            .toString(),
-        totalMarks:
-          totalMarks || 100,
-        passingMarks:
-          passingMarks || 33,
-        theoryMarks:
-          theoryMarks || 70,
-        practicalMarks:
-          practicalMarks || 30,
-        createdBy:
-          req.user.id
-      });
+    // ✅ Class না থাকলে auto-create
+    let classData = await Class.findOne({
+      className,
+      section: finalSection,
+      academicYear: finalYear
+    });
 
-    const populatedSubject =
-      await Subject.findById(
-        subject._id
-      ).populate(
-        'teacher',
-        'name email'
-      );
+    if (!classData) {
+      classData = await Class.create({
+        className,
+        section: finalSection,
+        academicYear: finalYear,
+        isActive: true,
+        createdBy: req.user.id
+      });
+      console.log(`✅ Auto-created class: ${className}-${finalSection} (${finalYear})`);
+    }
+
+    const subject = await Subject.create({
+      name,
+      code: code ? code.toUpperCase() : '',
+      description: description || '',
+      class: className,
+      section: finalSection,
+      teacher: teacher || null,
+      academicYear: finalYear,
+      totalMarks: totalMarks || 100,
+      passingMarks: passingMarks || 33,
+      theoryMarks: theoryMarks || 70,
+      practicalMarks: practicalMarks || 30,
+      createdBy: req.user.id
+    });
+
+    // ✅ Class-এর subjects array-তে subject যোগ
+    await Class.findByIdAndUpdate(
+      classData._id,
+      {
+        $push: {
+          subjects: {
+            subject: subject._id,
+            name: subject.name,
+            code: subject.code,
+            teacher: teacher || null,
+            isActive: true
+          }
+        }
+      }
+    );
+
+    const populatedSubject = await Subject.findById(subject._id)
+      .populate('teacher', 'name email');
 
     res.status(201).json({
       success: true,
-      message:
-        'Subject created successfully',
-      data:
-        populatedSubject
+      message: 'Subject created successfully',
+      data: populatedSubject
     });
-
   } catch (error) {
-    console.error(
-      'Create subject error:',
-      error
-    );
+    console.error('Create subject error:', error);
 
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message:
-          'Subject code already exists'
+        message: 'Subject code already exists'
       });
     }
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };

@@ -1927,17 +1927,26 @@ exports.createExam = async (req, res) => {
 
 exports.updateExam = async (req, res) => {
   try {
-    const { examName, examDate, teacher } = req.body;
+    const { examName, examDate, subject } = req.body;
 
-    const exam = await Result.findByIdAndUpdate(
-      req.params.id,
-      { examName, examDate, teacher: teacher || null },
-      { new: true, runValidators: true }
-    );
+    const exam = await Result.findById(req.params.id);
 
     if (!exam) {
       return res.status(404).json({ success: false, message: 'Exam not found' });
     }
+
+    if (examName) exam.examName = examName;
+    if (examDate) exam.examDate = examDate;
+
+    // Subject name change + date change
+    if (subject) {
+      const sub = exam.subjects.find(s => s.name === subject);
+      if (sub && examDate) {
+        sub.examDate = examDate;
+      }
+    }
+
+    await exam.save();
 
     res.status(200).json({
       success: true,
@@ -1998,35 +2007,34 @@ exports.getExams = async (req, res) => {
 
     let query = {};
 
-    if (className) {
-      query.class = className;
-    }
-
-    if (section) {
-      query.section = section;
-    }
-
-    if (published !== undefined) {
-      query.published = published === 'true';
-    }
+    if (className) query.class = className;
+    if (section) query.section = section;
 
     const exams = await Result.find(query)
       .populate('student', 'rollNumber')
-      .populate('teacher', 'name email')
-      .populate('publishedBy', 'name')
-      .sort({ examDate: -1 });
+      .sort({ examDate: -1, createdAt: -1 });
+
+    let filtered = exams;
+
+    if (published !== undefined) {
+      const wantPublished = published === 'true';
+      filtered = exams.filter((exam) => {
+        const subjects = exam.subjects || [];
+        if (subjects.length === 0) return !wantPublished;
+        const allPublished = subjects.every(s => s.published);
+        return wantPublished ? allPublished : !allPublished;
+      });
+    }
 
     res.status(200).json({
       success: true,
-      data: exams
+      data: filtered
     });
-
   } catch (error) {
     console.error('Get exams error:', error);
-
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: error.message || 'Server error'
     });
   }
 };

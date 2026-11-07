@@ -461,8 +461,8 @@ exports.generateClassReport = async (req, res) => {
     worksheet.addRow(headers);
 
     for (let student of students) {
-      let query = { student: student._id };
-      if (examName) query.examName = examName;
+let query = { student: studentId };      
+if (examName) query.examName = examName;
 
       const results = await Result.find(query).sort({ examDate: -1 });
       if (results.length > 0) {

@@ -2273,36 +2273,35 @@ exports.deleteNotice = async (
 // @desc    Get all subjects
 // @route   GET /api/admin/subjects
 // @access  Private (Admin only)
-exports.getSubjects = async (
-  req,
-  res
-) => {
+exports.getSubjects = async (req, res) => {
   try {
-    const subjects =
-      await Subject.find()
-        .populate(
-          'teacher',
-          'name email'
-        )
-        .sort({
-          name: 1
-        });
+    const {
+      class: className,
+      section,
+      teacher,
+      academicYear
+    } = req.query;
+
+    let query = { isActive: true };
+
+    if (className) query.class = className;
+    if (section) query.section = section;
+    if (teacher) query.teacher = teacher;
+    if (academicYear) query.academicYear = academicYear;
+
+    const subjects = await Subject.find(query)
+      .populate('teacher', 'name email')
+      .sort({ name: 1 });
 
     res.status(200).json({
       success: true,
       data: subjects
     });
-
   } catch (error) {
-    console.error(
-      'Get subjects error:',
-      error
-    );
-
+    console.error('Get subjects error:', error);
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };

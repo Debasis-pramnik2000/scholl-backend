@@ -6,7 +6,8 @@ const {
   getChildAttendance,
   getChildResults,
   updateParentProfile,
-  getParentNotices
+  getParentNotices,
+  getChildReportCard
 } = require('../controllers/parentController');
 
 router.use(protect);
@@ -17,5 +18,6 @@ router.get('/notices', getParentNotices);
 router.get('/attendance/:childId', getChildAttendance);
 router.get('/results/:childId', getChildResults);
 router.put('/profile', updateParentProfile);
+router.get('/report-card/:childId', getChildReportCard);
 
 module.exports = router;

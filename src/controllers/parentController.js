@@ -4,6 +4,7 @@ const Attendance = require('../models/Attendance');
 const Result = require('../models/Result');
 const User = require('../models/User');
 const Notice = require('../models/Notice');
+const PDFDocument = require('pdfkit');
 
 // @desc    Parent Dashboard
 // @route   GET /api/parent/dashboard
@@ -258,5 +259,57 @@ exports.updateParentProfile = async (req, res) => {
       success: false,
       message: 'Server error'
     });
+  }
+};
+const PDFDocument = require('pdfkit');
+
+// @desc    Download child report card (PDF)
+// @route   GET /api/parent/report-card/:childId
+// @access  Private (Parent only)
+exports.getChildReportCard = async (req, res) => {
+  try {
+    const { childId } = req.params;
+
+    const parent = await Parent.findOne({ user: req.user.id });
+    if (!parent) {
+      return res.status(404).json({ success: false, message: 'Parent not found' });
+    }
+
+    if (!parent.children.includes(childId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const student = await Student.findById(childId).populate('user', 'name');
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const results = await Result.find({ student: childId, published: true }).sort({ examDate: -1 });
+
+    const doc = new PDFDocument({ margin: 40 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="report-card-${student.rollNumber}.pdf"`);
+    doc.pipe(res);
+
+    doc.fontSize(18).text('Report Card', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Name: ${student.user?.name || 'N/A'}`);
+    doc.text(`Roll: ${student.rollNumber}   Class: ${student.class}-${student.section}`);
+    doc.moveDown();
+
+    results.forEach((r) => {
+      doc.fontSize(13).text(`${r.examName} (${r.examDate ? new Date(r.examDate).toLocaleDateString() : 'N/A'})`);
+      doc.fontSize(11);
+      (r.subjects || []).forEach((s) => {
+        doc.text(`  ${s.name}: ${s.marksObtained}/${s.totalMarks}  Grade: ${s.grade || '-'}`);
+      });
+      doc.text(`  Total: ${r.totalMarks}   Percentage: ${r.percentage}%   Grade: ${r.grade || '-'}`);
+      doc.moveDown();
+    });
+
+    doc.end();
+  } catch (error) {
+    console.error('Report card error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

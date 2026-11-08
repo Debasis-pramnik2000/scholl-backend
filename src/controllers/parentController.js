@@ -268,6 +268,9 @@ exports.updateParentProfile = async (req, res) => {
 // @desc    Download child report card (PDF)
 // @route   GET /api/parent/report-card/:childId
 // @access  Private (Parent only)
+// @desc    Download child report card (PDF)
+// @route   GET /api/parent/report-card/:childId
+// @access  Private (Parent only)
 exports.getChildReportCard = async (req, res) => {
   try {
     const { childId } = req.params;
@@ -288,7 +291,7 @@ exports.getChildReportCard = async (req, res) => {
 
     const results = await Result.find({ student: childId, published: true }).sort({ examDate: -1 });
 
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
@@ -296,83 +299,87 @@ exports.getChildReportCard = async (req, res) => {
     );
     doc.pipe(res);
 
-    // Header
-    doc.fontSize(20).font('Helvetica-Bold').text('REPORT CARD', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(12).font('Helvetica').text('School Management System', { align: 'center' });
-    doc.moveDown(1);
+    const left = 50;
+    const right = 545;
 
-    // Student Info
-    doc.fontSize(12).font('Helvetica-Bold').text('Student Information');
-    doc.moveDown(0.3);
-    doc.font('Helvetica').fontSize(11);
-    doc.text(`Name: ${student.user?.name || 'N/A'}`);
-    doc.text(`Roll Number: ${student.rollNumber || 'N/A'}`);
-    doc.text(`Class: ${student.class || 'N/A'} - Section: ${student.section || 'N/A'}`);
-    doc.text(`Email: ${student.user?.email || 'N/A'}`);
-    doc.moveDown(1);
+    const drawStudentHeader = () => {
+      doc.font('Helvetica-Bold').fontSize(20).fillColor('black')
+        .text('REPORT CARD', left, 50, { width: right - left, align: 'center' });
+      doc.moveDown(0.3);
+      doc.font('Helvetica').fontSize(11)
+        .text('School Management System', left, doc.y, { width: right - left, align: 'center' });
+      doc.moveDown(1);
+
+      doc.font('Helvetica-Bold').fontSize(12).text('Student Information', left, doc.y);
+      doc.moveDown(0.3);
+      doc.font('Helvetica').fontSize(11);
+      doc.text(`Name: ${student.user?.name || 'N/A'}`, left, doc.y);
+      doc.text(`Roll Number: ${student.rollNumber || 'N/A'}`, left, doc.y);
+      doc.text(`Class: ${student.class || 'N/A'} - Section: ${student.section || 'N/A'}`, left, doc.y);
+      doc.text(`Email: ${student.user?.email || 'N/A'}`, left, doc.y);
+      doc.moveDown(1);
+    };
+
+    drawStudentHeader();
 
     if (results.length === 0) {
-      doc.fontSize(12).font('Helvetica-Oblique').text('No published results available.');
+      doc.font('Helvetica-Oblique').fontSize(12)
+        .text('No published results available.', left, doc.y);
       doc.end();
       return;
     }
 
     results.forEach((result, index) => {
+      if (index > 0) {
+        doc.addPage();
+        drawStudentHeader();
+      }
+
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#0d6efd')
+        .text(`Exam: ${result.examName || 'N/A'}`, left, doc.y);
+      doc.fillColor('black').font('Helvetica').fontSize(11);
+      doc.text(`Date: ${result.examDate ? new Date(result.examDate).toLocaleDateString() : 'N/A'}`, left, doc.y);
+      doc.text(`Academic Year: ${result.academicYear || 'N/A'}`, left, doc.y);
       doc.moveDown(0.5);
-      doc.fontSize(13).font('Helvetica-Bold').fillColor('#0d6efd')
-        .text(`Exam: ${result.examName || 'N/A'}`, { underline: true });
-      doc.fillColor('black').fontSize(11).font('Helvetica');
-      doc.text(`Date: ${result.examDate ? new Date(result.examDate).toLocaleDateString() : 'N/A'}`);
-      doc.text(`Academic Year: ${result.academicYear || 'N/A'}`);
-      doc.moveDown(0.3);
 
       // Table header
-      const tableTop = doc.y;
-      const col1 = 50;   // Subject
-      const col2 = 250;  // Marks Obtained
-      const col3 = 350;  // Total Marks
-      const col4 = 450;  // Grade
-
+      let y = doc.y;
       doc.font('Helvetica-Bold').fontSize(11);
-      doc.text('Subject', col1, tableTop);
-      doc.text('Marks', col2, tableTop);
-      doc.text('Total', col3, tableTop);
-      doc.text('Grade', col4, tableTop);
+      doc.text('Subject', left, y, { width: 200 });
+      doc.text('Marks', 250, y, { width: 80 });
+      doc.text('Total', 330, y, { width: 80 });
+      doc.text('Grade', 410, y, { width: 80 });
+      y += 16;
+      doc.moveTo(left, y).lineTo(right, y).stroke();
+      y += 6;
 
-      doc.moveTo(col1, tableTop + 15).lineTo(550, tableTop + 15).stroke();
-
-      let rowY = tableTop + 20;
       doc.font('Helvetica').fontSize(10);
+      const subjects = result.subjects || [];
+      if (subjects.length === 0) {
+        doc.text('No subjects', left, y);
+        y += 16;
+      } else {
+        subjects.forEach((sub) => {
+          doc.text(sub.name || '-', left, y, { width: 200 });
+          doc.text(String(sub.marksObtained ?? '-'), 250, y, { width: 80 });
+          doc.text(String(sub.totalMarks ?? '-'), 330, y, { width: 80 });
+          doc.text(sub.grade || '-', 410, y, { width: 80 });
+          y += 16;
+        });
+      }
 
-      (result.subjects || []).forEach((sub) => {
-        doc.text(sub.name || '-', col1, rowY);
-        doc.text(String(sub.marksObtained ?? '-'), col2, rowY);
-        doc.text(String(sub.totalMarks ?? '-'), col3, rowY);
-        doc.text(sub.grade || '-', col4, rowY);
-        rowY += 18;
-      });
-
-      doc.moveTo(col1, rowY).lineTo(550, rowY).stroke();
-      rowY += 10;
+      doc.moveTo(left, y).lineTo(right, y).stroke();
+      y += 10;
 
       doc.font('Helvetica-Bold').fontSize(11);
-      doc.text(`Total Marks: ${result.totalMarks ?? '-'}`, col1, rowY);
-      rowY += 16;
-      doc.text(`Percentage: ${result.percentage ?? '-'}%`, col1, rowY);
-      rowY += 16;
-      doc.text(`Overall Grade: ${result.grade || '-'}`, col1, rowY);
-      rowY += 16;
+      doc.text(`Total Marks: ${result.totalMarks ?? '-'}`, left, y); y += 16;
+      doc.text(`Percentage: ${result.percentage ?? '-'}%`, left, y); y += 16;
+      doc.text(`Overall Grade: ${result.grade || '-'}`, left, y); y += 16;
       if (result.rank) {
-        doc.text(`Rank: ${result.rank}`, col1, rowY);
-        rowY += 16;
+        doc.text(`Rank: ${result.rank}`, left, y); y += 16;
       }
 
-      doc.y = rowY + 10;
-
-      if (index < results.length - 1) {
-        doc.addPage();
-      }
+      doc.y = y;
     });
 
     doc.end();

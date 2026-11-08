@@ -1,3 +1,4 @@
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -8,10 +9,12 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
-// Load env vars
+// ==================== LOAD ENV VARIABLES ====================
+
 dotenv.config();
 
-// Route files
+// ==================== ROUTE FILES ====================
+
 const authRoutes = require('./src/routes/authRoutes');
 const studentRoutes = require('./src/routes/studentRoutes');
 const teacherRoutes = require('./src/routes/teacherRoutes');
@@ -28,18 +31,21 @@ const admissionAdminRoutes = require('./src/routes/admissionAdminRoutes');
 
 const app = express();
 
-// Trust proxy
+// ==================== TRUST PROXY ====================
+
 app.set('trust proxy', 1);
 
-// ==================== 1. HELMET (FULLY CONFIGURED) ====================
+// ==================== 1. HELMET ====================
 
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: false
+    crossOriginResourcePolicy: {
+        policy: "cross-origin"
+    },
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false
 }));
 
-// ==================== 2. STATIC FILES (BEFORE BODY PARSER!) ====================
+// ==================== 2. STATIC FILES ====================
 
 const uploadsPath = path.join(__dirname, 'uploads');
 
@@ -47,17 +53,23 @@ console.log('📁 Uploads path:', uploadsPath);
 console.log('📁 Uploads exists:', fs.existsSync(uploadsPath));
 
 app.use('/uploads', express.static(uploadsPath, {
-  setHeaders: (res, filePath) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.set('Access-Control-Allow-Methods', 'GET');
-  }
+    setHeaders: (res, filePath) => {
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.set('Access-Control-Allow-Methods', 'GET');
+    }
 }));
 
 // ==================== 3. BODY PARSER ====================
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({
+    limit: '10mb'
+}));
+
+app.use(express.urlencoded({
+    extended: true,
+    limit: '10mb'
+}));
 
 // ==================== 4. XSS ====================
 
@@ -66,52 +78,87 @@ app.use(xss());
 // ==================== 5. RATE LIMITING ====================
 
 const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.path === '/api/health'
+    windowMs: 10 * 60 * 1000,
+    max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.path === '/health'
 });
 
 app.use('/api', limiter);
 
-// ==================== 6. CORS (MULTIPLE ORIGINS) ====================
+// ==================== 6. CORS ====================
 
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://mansinghabarh-mvh.vercel.app'
-  ],
-  credentials: true
+    origin: [
+        'http://localhost:3000',
+        'https://mansinghabarh-mvh.vercel.app'
+    ],
+    credentials: true,
+    methods: [
+        'GET',
+        'POST',
+        'PUT',
+        'PATCH',
+        'DELETE',
+        'OPTIONS'
+    ],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization'
+    ]
 }));
 
 // ==================== 7. MODELS ====================
 
 const User = require('./src/models/User.js');
 
-// ==================== 8. MONGODB CONNECTION ====================
+// ==================== 8. CREATE DEFAULT ADMIN ====================
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(async () => {
-    console.log('✅ MongoDB Connected');
-    await createDefaultAdmin();
-  })
-  .catch(err => console.log('❌ MongoDB Connection Error:', err));
+const createDefaultAdmin = async () => {
+    try {
+        const adminExists = await User.findOne({
+            username: process.env.ADMIN_USERNAME || 'admin'
+        });
+
+        if (!adminExists) {
+            await User.create({
+                username: process.env.ADMIN_USERNAME || 'admin',
+                password: process.env.ADMIN_PASSWORD || 'admin123',
+                role: 'admin',
+                name: 'System Administrator',
+                email: 'admin@school.com',
+                isActive: true
+            });
+
+            console.log('✅ Default admin created successfully');
+        } else {
+            console.log('✅ Admin user already exists');
+        }
+
+    } catch (error) {
+        console.error('❌ Error creating admin:', error);
+    }
+};
 
 // ==================== 9. MOUNT ROUTES ====================
 
-// ✅ Admin admissions FIRST (specific path)
+// Admin admissions FIRST
+
 app.use('/api/admin/admissions', admissionAdminRoutes);
 
-// ✅ Timetable routes
+// Timetable routes
+
 app.use('/api/admin/timetable', timetableRoutes);
 app.use('/api/teacher/timetable', timetableRoutes);
 app.use('/api/student/timetable', timetableRoutes);
 
-// ✅ Public admission routes
+// Public admission routes
+
 app.use('/api/admission', admissionPublicRoutes);
 
-// ✅ General routes
+// General routes
+
 app.use('/api/auth', authRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/student', reportRoutes);
@@ -123,101 +170,182 @@ app.use('/api/parent', parentRoutes);
 app.use('/api/leave', leaveRoutes);
 app.use('/api/public', publicRoutes);
 
-// ==================== ROOT ROUTE ====================
+// ==================== 10. ROOT ROUTE ====================
 
 app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'School Management Backend API is running 🚀'
-  });
+    res.status(200).json({
+        success: true,
+        message: 'School Management Backend API is running 🚀'
+    });
 });
 
-// ==================== 10. TEST ROUTES (DEBUG) ====================
+// ==================== 11. TEST UPLOADS ====================
 
 app.get('/test-uploads', (req, res) => {
-  const admissionsDir = path.join(__dirname, 'uploads', 'admissions');
-  const profilesDir = path.join(__dirname, 'uploads', 'profiles');
-  const materialsDir = path.join(__dirname, 'uploads', 'materials');
 
-  res.json({
-    uploadsPath,
-    uploadsExists: fs.existsSync(uploadsPath),
-    admissionsPath: admissionsDir,
-    admissionsExists: fs.existsSync(admissionsDir),
-    profilesPath: profilesDir,
-    profilesExists: fs.existsSync(profilesDir),
-    materialsPath: materialsDir,
-    materialsExists: fs.existsSync(materialsDir),
-    admissionFiles: fs.existsSync(admissionsDir) ? fs.readdirSync(admissionsDir) : [],
-    profileFiles: fs.existsSync(profilesDir) ? fs.readdirSync(profilesDir) : [],
-    materialFiles: fs.existsSync(materialsDir) ? fs.readdirSync(materialsDir) : []
-  });
+    const admissionsDir = path.join(__dirname, 'uploads', 'admissions');
+    const profilesDir = path.join(__dirname, 'uploads', 'profiles');
+    const materialsDir = path.join(__dirname, 'uploads', 'materials');
+
+    res.json({
+        uploadsPath,
+        uploadsExists: fs.existsSync(uploadsPath),
+
+        admissionsPath: admissionsDir,
+        admissionsExists: fs.existsSync(admissionsDir),
+
+        profilesPath: profilesDir,
+        profilesExists: fs.existsSync(profilesDir),
+
+        materialsPath: materialsDir,
+        materialsExists: fs.existsSync(materialsDir),
+
+        admissionFiles: fs.existsSync(admissionsDir)
+            ? fs.readdirSync(admissionsDir)
+            : [],
+
+        profileFiles: fs.existsSync(profilesDir)
+            ? fs.readdirSync(profilesDir)
+            : [],
+
+        materialFiles: fs.existsSync(materialsDir)
+            ? fs.readdirSync(materialsDir)
+            : []
+    });
 });
 
-// ==================== 11. HEALTH CHECK ====================
+// ==================== 12. HEALTH CHECK ====================
 
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Server is running',
-    timestamp: new Date().toISOString()
-  });
-});
 
-// ==================== 12. 404 HANDLER (MUST BE LAST!) ====================
-
-app.use((req, res) => {
-  console.log('❌ 404:', req.originalUrl);
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.originalUrl} not found`
-  });
-});
-
-// ==================== 13. ERROR HANDLER ====================
-
-app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.stack);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err : {}
-  });
-});
-
-// ==================== 14. CREATE DEFAULT ADMIN ====================
-
-const createDefaultAdmin = async () => {
-  try {
-    const adminExists = await User.findOne({
-      username: process.env.ADMIN_USERNAME || 'admin'
+    res.status(200).json({
+        success: true,
+        message: 'Server is running',
+        timestamp: new Date().toISOString()
     });
 
-    if (!adminExists) {
-      await User.create({
-        username: process.env.ADMIN_USERNAME || 'admin',
-        password: process.env.ADMIN_PASSWORD || 'admin123',
-        role: 'admin',
-        name: 'System Administrator',
-        email: 'admin@school.com',
-        isActive: true
-      });
-      console.log('✅ Default admin created successfully');
-    } else {
-      console.log('✅ Admin user already exists');
-    }
-  } catch (error) {
-    console.error('❌ Error creating admin:', error);
-  }
-};
+});
+
+// ==================== 13. 404 HANDLER ====================
+
+app.use((req, res) => {
+
+    console.log('❌ 404:', req.originalUrl);
+
+    res.status(404).json({
+        success: false,
+        message: `Route ${req.originalUrl} not found`
+    });
+
+});
+
+// ==================== 14. ERROR HANDLER ====================
+
+app.use((err, req, res, next) => {
+
+    console.error('❌ Error:', err.stack);
+
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Something went wrong!',
+
+        error: process.env.NODE_ENV === 'development'
+            ? err
+            : {}
+    });
+
+});
 
 // ==================== 15. START SERVER ====================
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 API: http://localhost:${PORT}/api`);
-  console.log(`📁 Static: http://localhost:${PORT}/uploads`);
-  console.log(`🧪 Test: http://localhost:${PORT}/test-uploads`);
-});
+let server;
+
+const startServer = async () => {
+
+    try {
+
+        // Check MongoDB environment variable
+
+        if (!process.env.MONGODB_URI) {
+            throw new Error('MONGODB_URI is missing in environment variables');
+        }
+
+        // Connect MongoDB
+
+        await mongoose.connect(process.env.MONGODB_URI);
+
+        console.log('✅ MongoDB Connected Successfully');
+
+        // Create default admin
+
+        await createDefaultAdmin();
+
+        // Start Express server
+
+        server = app.listen(PORT, '0.0.0.0', () => {
+
+            console.log(`🚀 Server running on port ${PORT}`);
+
+            console.log(`🌐 API: http://localhost:${PORT}/api`);
+
+            console.log(`📁 Static: http://localhost:${PORT}/uploads`);
+
+            console.log(`🧪 Test: http://localhost:${PORT}/test-uploads`);
+
+            console.log('✅ Backend is ready');
+
+        });
+
+    } catch (error) {
+
+        console.error('❌ Server Startup Failed:', error);
+
+        process.exit(1);
+
+    }
+
+};
+
+// ==================== 16. GRACEFUL SHUTDOWN ====================
+
+const shutdown = async (signal) => {
+
+    console.log(`🛑 ${signal} received. Shutting down...`);
+
+    try {
+
+        if (server) {
+            await new Promise((resolve, reject) => {
+                server.close((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        }
+
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.connection.close();
+        }
+
+        console.log('✅ Server and MongoDB disconnected');
+
+        process.exit(0);
+
+    } catch (error) {
+
+        console.error('❌ Shutdown Error:', error);
+
+        process.exit(1);
+
+    }
+
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// ==================== START APPLICATION ====================
+
+startServer();

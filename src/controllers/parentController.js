@@ -89,9 +89,29 @@ exports.getParentDashboard = async (req, res) => {
 exports.getParentNotices = async (req, res) => {
   try {
     const notices = await Notice.find({
-      targetRoles: 'parent',
-      isActive: true,
-      expiresAt: { $gt: new Date() }
+      $and: [
+        {
+          $or: [
+            { targetRoles: 'parent' },
+            { targetRoles: { $exists: false } },
+            { targetRoles: { $size: 0 } },
+            { targetRoles: 'all' }
+          ]
+        },
+        {
+          $or: [
+            { isActive: true },
+            { isActive: { $exists: false } }
+          ]
+        },
+        {
+          $or: [
+            { expiresAt: { $gt: new Date() } },
+            { expiresAt: { $exists: false } },
+            { expiresAt: null }
+          ]
+        }
+      ]
     })
     .populate('author', 'name')
     .sort({ createdAt: -1 });

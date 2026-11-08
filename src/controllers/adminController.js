@@ -2094,8 +2094,9 @@ exports.createNotice = async (req, res) => {
       title,
       content,
       author: req.user.id,
-      targetRoles: targetRoles || ['student', 'teacher', 'admin', 'parent'],
-      priority: priority || 'Medium',
+targetRoles: (Array.isArray(targetRoles) && targetRoles.length > 0) 
+  ? targetRoles 
+  : ['student', 'teacher', 'admin', 'parent'],      priority: priority || 'Medium',
       expiresAt: expiresAt || null,
       attachments: attachments || [],
       isPublic: isPublic || false,

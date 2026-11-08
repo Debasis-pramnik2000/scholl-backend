@@ -261,7 +261,6 @@ exports.updateParentProfile = async (req, res) => {
     });
   }
 };
-const PDFDocument = require('pdfkit');
 
 // @desc    Download child report card (PDF)
 // @route   GET /api/parent/report-card/:childId

@@ -289,8 +289,7 @@ exports.getChildReportCard = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
-    const results = await Result.find({ student: childId, published: true }).sort({ examDate: -1 });
-
+const results = await Result.find({ student: childId }).sort({ examDate: -1 });
     const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(

@@ -5,13 +5,15 @@ const {
   getParentDashboard,
   getChildAttendance,
   getChildResults,
-  updateParentProfile
+  updateParentProfile,
+  getParentNotices
 } = require('../controllers/parentController');
 
 router.use(protect);
 router.use(authorize('parent'));
 
 router.get('/dashboard', getParentDashboard);
+router.get('/notices', getParentNotices);
 router.get('/attendance/:childId', getChildAttendance);
 router.get('/results/:childId', getChildResults);
 router.put('/profile', updateParentProfile);

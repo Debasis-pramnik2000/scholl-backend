@@ -29,7 +29,7 @@ exports.getParentDashboard = async (req, res) => {
       // Get attendance summary for current month
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      
+
       const attendance = await Attendance.find({
         student: child._id,
         date: { $gte: startOfMonth }
@@ -75,6 +75,32 @@ exports.getParentDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Parent dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get parent notices
+// @route   GET /api/parent/notices
+// @access  Private (Parent only)
+exports.getParentNotices = async (req, res) => {
+  try {
+    const notices = await Notice.find({
+      targetRoles: 'parent',
+      isActive: true,
+      expiresAt: { $gt: new Date() }
+    })
+    .populate('author', 'name')
+    .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: notices
+    });
+  } catch (error) {
+    console.error('Get parent notices error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -137,8 +163,8 @@ exports.getChildAttendance = async (req, res) => {
           absent,
           late,
           total: attendance.length,
-          percentage: attendance.length > 0 
-            ? ((present / attendance.length) * 100).toFixed(2) 
+          percentage: attendance.length > 0
+            ? ((present / attendance.length) * 100).toFixed(2)
             : 0
         }
       }
@@ -211,7 +237,7 @@ exports.updateParentProfile = async (req, res) => {
     const parent = await Parent.findOneAndUpdate(
       { user: req.user.id },
       { occupation, relationship, address },
-     { returnDocument: "after", runValidators: true }
+      { returnDocument: "after", runValidators: true }
     ).populate('children', 'rollNumber class section');
 
     if (!parent) {

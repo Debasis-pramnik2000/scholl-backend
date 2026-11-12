@@ -342,7 +342,15 @@ const shutdown = async (signal) => {
     }
 
 };
-
+app.use((err, req, res, next) => {
+  if (err instanceof require('multer').MulterError) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  if (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
+  next();
+});
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 

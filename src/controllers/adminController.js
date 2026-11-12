@@ -7,7 +7,6 @@ const Result = require('../models/Result');
 const Notice = require('../models/Notice');
 const Subject = require('../models/Subject');
 const Class = require('../models/Class');
-// Add this at the top with other imports
 const Parent = require('../models/Parent');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -41,7 +40,6 @@ exports.getDashboardStats = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(5);
 
-    // Monthly attendance data for chart
     const startOfMonth = new Date(
       today.getFullYear(),
       today.getMonth(),
@@ -104,7 +102,6 @@ exports.getDashboardStats = async (req, res) => {
     });
   }
 };
-// ✅ Add these functions at the end of adminController.js
 
 // @desc    Update admin profile photo
 // @route   PUT /api/admin/profile-photo
@@ -139,6 +136,7 @@ exports.updateAdminProfilePhoto = async (req, res) => {
     });
   }
 };
+
 // ==================== STUDENT MANAGEMENT ====================
 
 // @desc    Get all students with pagination
@@ -156,27 +154,14 @@ exports.getStudents = async (req, res) => {
     if (search) {
       query = {
         $or: [
-          {
-            rollNumber: {
-              $regex: search,
-              $options: 'i'
-            }
-          },
-          {
-            class: {
-              $regex: search,
-              $options: 'i'
-            }
-          }
+          { rollNumber: { $regex: search, $options: 'i' } },
+          { class: { $regex: search, $options: 'i' } }
         ]
       };
     }
 
     const students = await Student.find(query)
-      .populate(
-        'user',
-        'name email phone profilePicture username'
-      )
+      .populate('user', 'name email phone profilePicture username')
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 });
@@ -197,7 +182,6 @@ exports.getStudents = async (req, res) => {
     });
   } catch (error) {
     console.error('Get students error:', error);
-
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -226,7 +210,6 @@ exports.getStudentById = async (req, res) => {
     });
   } catch (error) {
     console.error('Get student error:', error);
-
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -283,7 +266,6 @@ exports.createStudent = async (req, res) => {
       });
     }
 
-    // ✅ Class না থাকলে auto-create
     let classData = await Class.findOne({
       className: studentClass,
       section: finalSection,
@@ -408,25 +390,24 @@ exports.updateStudent = async (req, res) => {
       isActive
     });
 
-    const updatedStudent =
-      await Student.findByIdAndUpdate(
-        studentId,
-        {
-          rollNumber,
-          class: studentClass,
-          section,
-          academicYear,
-          parentName,
-          parentPhone,
-          address,
-          dateOfBirth,
-          gender
-        },
-        {
-          returnDocument: 'after',
-          runValidators: true
-        }
-      ).populate('user', '-password');
+    const updatedStudent = await Student.findByIdAndUpdate(
+      studentId,
+      {
+        rollNumber,
+        class: studentClass,
+        section,
+        academicYear,
+        parentName,
+        parentPhone,
+        address,
+        dateOfBirth,
+        gender
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).populate('user', '-password');
 
     res.status(200).json({
       success: true,
@@ -437,13 +418,11 @@ exports.updateStudent = async (req, res) => {
     console.error('Update student error:', error);
 
     if (error.code === 11000) {
-      const field =
-        Object.keys(error.keyPattern)[0];
+      const field = Object.keys(error.keyPattern)[0];
 
       return res.status(400).json({
         success: false,
-        message:
-          `${field} already exists. Please use a different ${field}.`
+        message: `${field} already exists. Please use a different ${field}.`
       });
     }
 
@@ -459,8 +438,7 @@ exports.updateStudent = async (req, res) => {
 // @access  Private (Admin only)
 exports.deleteStudent = async (req, res) => {
   try {
-    const student =
-      await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -505,8 +483,7 @@ exports.resetStudentPassword = async (req, res) => {
   try {
     const { newPassword } = req.body;
 
-    const student =
-      await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -515,8 +492,7 @@ exports.resetStudentPassword = async (req, res) => {
       });
     }
 
-    const user =
-      await User.findById(student.user);
+    const user = await User.findById(student.user);
 
     user.password = newPassword;
 
@@ -552,16 +528,12 @@ exports.getTeachers = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const teachers = await Teacher.find()
-      .populate(
-        'user',
-        'name email phone profilePicture username'
-      )
+      .populate('user', 'name email phone profilePicture username')
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 });
 
-    const total =
-      await Teacher.countDocuments();
+    const total = await Teacher.countDocuments();
 
     res.status(200).json({
       success: true,
@@ -584,10 +556,6 @@ exports.getTeachers = async (req, res) => {
     });
   }
 };
-
-// =====================================================
-// FIXED CREATE TEACHER
-// =====================================================
 
 // @desc    Create teacher
 // @route   POST /api/admin/teachers
@@ -614,10 +582,6 @@ exports.createTeacher = async (req, res) => {
       subjects
     } = req.body;
 
-    // -----------------------------
-    // Basic validation
-    // -----------------------------
-
     if (!username || !username.trim()) {
       return res.status(400).json({
         success: false,
@@ -628,8 +592,7 @@ exports.createTeacher = async (req, res) => {
     if (!password || password.length < 6) {
       return res.status(400).json({
         success: false,
-        message:
-          'Password is required and must be at least 6 characters'
+        message: 'Password is required and must be at least 6 characters'
       });
     }
 
@@ -656,17 +619,9 @@ exports.createTeacher = async (req, res) => {
 
     const cleanUsername = username.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanEmployeeId =
-      employeeId.trim().toUpperCase();
+    const cleanEmployeeId = employeeId.trim().toUpperCase();
 
-    // -----------------------------
-    // Check username
-    // -----------------------------
-
-    const existingUser =
-      await User.findOne({
-        username: cleanUsername
-      });
+    const existingUser = await User.findOne({ username: cleanUsername });
 
     if (existingUser) {
       return res.status(400).json({
@@ -675,54 +630,30 @@ exports.createTeacher = async (req, res) => {
       });
     }
 
-    // -----------------------------
-    // Check email
-    // -----------------------------
-
-    const existingEmail =
-      await User.findOne({
-        email: cleanEmail
-      });
+    const existingEmail = await User.findOne({ email: cleanEmail });
 
     if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message:
-          'Email already registered. Please use a different email.'
+        message: 'Email already registered. Please use a different email.'
       });
     }
 
-    // -----------------------------
-    // Check employee ID
-    // -----------------------------
-
-    const existingEmployee =
-      await Teacher.findOne({
-        employeeId: cleanEmployeeId
-      });
+    const existingEmployee = await Teacher.findOne({ employeeId: cleanEmployeeId });
 
     if (existingEmployee) {
       return res.status(400).json({
         success: false,
-        message:
-          'Employee ID already exists'
+        message: 'Employee ID already exists'
       });
     }
-
-    // -----------------------------
-    // Prepare address
-    // -----------------------------
 
     let addressObj = {};
 
     if (address) {
       if (typeof address === 'string') {
-        addressObj = {
-          street: address.trim()
-        };
-      } else if (
-        typeof address === 'object'
-      ) {
+        addressObj = { street: address.trim() };
+      } else if (typeof address === 'object') {
         addressObj = {
           street: address.street || '',
           city: address.city || '',
@@ -733,76 +664,30 @@ exports.createTeacher = async (req, res) => {
       }
     }
 
-    // -----------------------------
-    // Prepare subjects
-    // -----------------------------
-
     let normalizedSubjects = [];
 
     if (Array.isArray(subjects)) {
       normalizedSubjects = subjects
         .map(subject => {
-          // Frontend may send:
-          // "Math"
           if (typeof subject === 'string') {
-            const subjectName =
-              subject.trim();
-
-            if (!subjectName) {
-              return null;
-            }
-
-            return {
-              name: subjectName,
-              isActive: true
-            };
+            const subjectName = subject.trim();
+            if (!subjectName) return null;
+            return { name: subjectName, isActive: true };
           }
 
-          // Or frontend may send:
-          // {
-          //   name,
-          //   subjectId,
-          //   code,
-          //   isActive
-          // }
-          if (
-            subject &&
-            typeof subject === 'object'
-          ) {
+          if (subject && typeof subject === 'object') {
             return {
-              name:
-                subject.name
-                  ? String(
-                      subject.name
-                    ).trim()
-                  : '',
-              subjectId:
-                subject.subjectId || undefined,
-              code:
-                subject.code
-                  ? String(
-                      subject.code
-                    )
-                      .trim()
-                      .toUpperCase()
-                  : '',
-              isActive:
-                subject.isActive !== false
+              name: subject.name ? String(subject.name).trim() : '',
+              subjectId: subject.subjectId || undefined,
+              code: subject.code ? String(subject.code).trim().toUpperCase() : '',
+              isActive: subject.isActive !== false
             };
           }
 
           return null;
         })
-        .filter(
-          subject =>
-            subject &&
-            subject.name
-        );
+        .filter(subject => subject && subject.name);
     }
-
-    // -----------------------------
-    // Create User
-    // -----------------------------
 
     createdUser = await User.create({
       username: cleanUsername,
@@ -810,15 +695,9 @@ exports.createTeacher = async (req, res) => {
       role: 'teacher',
       name: name.trim(),
       email: cleanEmail,
-      phone: phone
-        ? String(phone).trim()
-        : '',
+      phone: phone ? String(phone).trim() : '',
       isActive: true
     });
-
-    // -----------------------------
-    // Create Teacher profile
-    // -----------------------------
 
     let teacher;
 
@@ -826,140 +705,67 @@ exports.createTeacher = async (req, res) => {
       teacher = await Teacher.create({
         user: createdUser._id,
         employeeId: cleanEmployeeId,
-        qualification:
-          qualification || '',
-        specialization:
-          specialization || '',
-        department:
-          department || 'Other',
+        qualification: qualification || '',
+        specialization: specialization || '',
+        department: department || 'Other',
         experience:
-          experience !== undefined &&
-          experience !== null &&
-          experience !== ''
+          experience !== undefined && experience !== null && experience !== ''
             ? Number(experience)
             : 0,
-        previousInstitution:
-          previousInstitution || '',
-        dateOfBirth:
-          dateOfBirth || null,
-        gender:
-          gender || 'Other',
+        previousInstitution: previousInstitution || '',
+        dateOfBirth: dateOfBirth || null,
+        gender: gender || 'Other',
         address: addressObj,
-        subjects:
-          normalizedSubjects,
+        subjects: normalizedSubjects,
         createdBy: req.user.id
       });
     } catch (teacherError) {
-      // If teacher creation fails,
-      // remove already-created user.
       if (createdUser) {
-        await User.findByIdAndDelete(
-          createdUser._id
-        );
+        await User.findByIdAndDelete(createdUser._id);
       }
-
       throw teacherError;
     }
 
-    // -----------------------------
-    // Populate teacher
-    // -----------------------------
-
-    const populatedTeacher =
-      await Teacher.findById(
-        teacher._id
-      )
-        .populate(
-          'user',
-          '-password'
-        )
-        .populate(
-          'createdBy',
-          'name'
-        );
-
-    // -----------------------------
-    // Success response
-    // -----------------------------
+    const populatedTeacher = await Teacher.findById(teacher._id)
+      .populate('user', '-password')
+      .populate('createdBy', 'name');
 
     return res.status(201).json({
       success: true,
-      message:
-        'Teacher created successfully',
+      message: 'Teacher created successfully',
       data: populatedTeacher
     });
-
   } catch (error) {
-    console.error(
-      'Create teacher error:',
-      error
-    );
-
-    // -----------------------------
-    // Duplicate key error
-    // -----------------------------
+    console.error('Create teacher error:', error);
 
     if (error.code === 11000) {
-      const field =
-        error.keyPattern
-          ? Object.keys(
-              error.keyPattern
-            )[0]
-          : 'field';
+      const field = error.keyPattern ? Object.keys(error.keyPattern)[0] : 'field';
 
       return res.status(400).json({
         success: false,
-        message:
-          `${field} already exists. Please use a different ${field}.`
+        message: `${field} already exists. Please use a different ${field}.`
       });
     }
 
-    // -----------------------------
-    // Mongoose validation error
-    // -----------------------------
-
-    if (
-      error.name ===
-      'ValidationError'
-    ) {
-      const messages =
-        Object.values(
-          error.errors
-        ).map(
-          err => err.message
-        );
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
 
       return res.status(400).json({
         success: false,
-        message:
-          messages.join('. ')
+        message: messages.join('. ')
       });
     }
 
-    // -----------------------------
-    // Cast error
-    // -----------------------------
-
-    if (
-      error.name ===
-      'CastError'
-    ) {
+    if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
-        message:
-          `Invalid value for ${error.path}`
+        message: `Invalid value for ${error.path}`
       });
     }
-
-    // -----------------------------
-    // General error
-    // -----------------------------
 
     return res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -988,10 +794,7 @@ exports.updateTeacher = async (req, res) => {
       isActive
     } = req.body;
 
-    const teacher =
-      await Teacher.findById(
-        teacherId
-      );
+    const teacher = await Teacher.findById(teacherId);
 
     if (!teacher) {
       return res.status(404).json({
@@ -1000,123 +803,64 @@ exports.updateTeacher = async (req, res) => {
       });
     }
 
-    await User.findByIdAndUpdate(
-      teacher.user,
-      {
-        name,
-        email,
-        phone,
-        isActive
-      }
-    );
+    await User.findByIdAndUpdate(teacher.user, {
+      name,
+      email,
+      phone,
+      isActive
+    });
 
     let addressObj = {};
 
     if (address) {
       if (typeof address === 'string') {
-        addressObj = {
-          street: address
-        };
+        addressObj = { street: address };
       } else {
         addressObj = address;
       }
     }
 
-    const updatedTeacher =
-      await Teacher.findByIdAndUpdate(
-        teacherId,
-        {
-          employeeId:
-            employeeId
-              ? employeeId.toUpperCase()
-              : teacher.employeeId,
-
-          qualification:
-            qualification ||
-            teacher.qualification,
-
-          specialization:
-            specialization ||
-            teacher.specialization,
-
-          department:
-            department ||
-            teacher.department ||
-            'Other',
-
-          experience:
-            experience !== undefined
-              ? experience
-              : teacher.experience,
-
-          previousInstitution:
-            previousInstitution ||
-            teacher.previousInstitution,
-
-          dateOfBirth:
-            dateOfBirth ||
-            teacher.dateOfBirth,
-
-          gender:
-            gender ||
-            teacher.gender ||
-            'Other',
-
-          address:
-            Object.keys(
-              addressObj
-            ).length > 0
-              ? addressObj
-              : teacher.address,
-
-          subjects:
-            subjects ||
-            teacher.subjects,
-
-          updatedBy:
-            req.user.id
-        },
-        {
-          returnDocument: 'after',
-          runValidators: true
-        }
-      )
-      .populate(
-        'user',
-        '-password'
-      );
+    const updatedTeacher = await Teacher.findByIdAndUpdate(
+      teacherId,
+      {
+        employeeId: employeeId ? employeeId.toUpperCase() : teacher.employeeId,
+        qualification: qualification || teacher.qualification,
+        specialization: specialization || teacher.specialization,
+        department: department || teacher.department || 'Other',
+        experience: experience !== undefined ? experience : teacher.experience,
+        previousInstitution: previousInstitution || teacher.previousInstitution,
+        dateOfBirth: dateOfBirth || teacher.dateOfBirth,
+        gender: gender || teacher.gender || 'Other',
+        address: Object.keys(addressObj).length > 0 ? addressObj : teacher.address,
+        subjects: subjects || teacher.subjects,
+        updatedBy: req.user.id
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).populate('user', '-password');
 
     res.status(200).json({
       success: true,
-      message:
-        'Teacher updated successfully',
+      message: 'Teacher updated successfully',
       data: updatedTeacher
     });
-
   } catch (error) {
-    console.error(
-      'Update teacher error:',
-      error
-    );
+    console.error('Update teacher error:', error);
 
     if (error.code === 11000) {
-      const field =
-        Object.keys(
-          error.keyPattern
-        )[0];
+      const field = Object.keys(error.keyPattern)[0];
 
       return res.status(400).json({
         success: false,
-        message:
-          `${field} already exists. Please use a different ${field}.`
+        message: `${field} already exists. Please use a different ${field}.`
       });
     }
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -1126,10 +870,7 @@ exports.updateTeacher = async (req, res) => {
 // @access  Private (Admin only)
 exports.deleteTeacher = async (req, res) => {
   try {
-    const teacher =
-      await Teacher.findById(
-        req.params.id
-      );
+    const teacher = await Teacher.findById(req.params.id);
 
     if (!teacher) {
       return res.status(404).json({
@@ -1138,25 +879,15 @@ exports.deleteTeacher = async (req, res) => {
       });
     }
 
-    await User.findByIdAndDelete(
-      teacher.user
-    );
-
-    await Teacher.findByIdAndDelete(
-      req.params.id
-    );
+    await User.findByIdAndDelete(teacher.user);
+    await Teacher.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
-      message:
-        'Teacher deleted successfully'
+      message: 'Teacher deleted successfully'
     });
-
   } catch (error) {
-    console.error(
-      'Delete teacher error:',
-      error
-    );
+    console.error('Delete teacher error:', error);
 
     res.status(500).json({
       success: false,
@@ -1168,18 +899,11 @@ exports.deleteTeacher = async (req, res) => {
 // @desc    Reset teacher password
 // @route   PUT /api/admin/teachers/:id/reset-password
 // @access  Private (Admin only)
-exports.resetTeacherPassword = async (
-  req,
-  res
-) => {
+exports.resetTeacherPassword = async (req, res) => {
   try {
-    const { newPassword } =
-      req.body;
+    const { newPassword } = req.body;
 
-    const teacher =
-      await Teacher.findById(
-        req.params.id
-      );
+    const teacher = await Teacher.findById(req.params.id);
 
     if (!teacher) {
       return res.status(404).json({
@@ -1188,32 +912,22 @@ exports.resetTeacherPassword = async (
       });
     }
 
-    const user =
-      await User.findById(
-        teacher.user
-      );
+    const user = await User.findById(teacher.user);
 
-    user.password =
-      newPassword;
+    user.password = newPassword;
 
     await user.save();
 
     res.status(200).json({
       success: true,
-      message:
-        'Password reset successfully',
+      message: 'Password reset successfully',
       data: {
-        username:
-          user.username,
+        username: user.username,
         newPassword
       }
     });
-
   } catch (error) {
-    console.error(
-      'Reset password error:',
-      error
-    );
+    console.error('Reset password error:', error);
 
     res.status(500).json({
       success: false,
@@ -1227,30 +941,18 @@ exports.resetTeacherPassword = async (
 // @desc    Get all classes
 // @route   GET /api/admin/classes
 // @access  Private (Admin only)
-exports.getClasses = async (
-  req,
-  res
-) => {
+exports.getClasses = async (req, res) => {
   try {
-    const classes =
-      await Class.find()
-        .populate(
-          'classTeacher',
-          'name'
-        )
-        .sort({
-          className: 1
-        });
+    const classes = await Class.find()
+      .populate('classTeacher', 'name')
+      .sort({ className: 1 });
 
     res.status(200).json({
       success: true,
       data: classes
     });
   } catch (error) {
-    console.error(
-      'Get classes error:',
-      error
-    );
+    console.error('Get classes error:', error);
 
     res.status(500).json({
       success: false,
@@ -1262,10 +964,7 @@ exports.getClasses = async (
 // @desc    Create class
 // @route   POST /api/admin/classes
 // @access  Private (Admin only)
-exports.createClass = async (
-  req,
-  res
-) => {
+exports.createClass = async (req, res) => {
   try {
     const {
       className,
@@ -1278,70 +977,40 @@ exports.createClass = async (
       description
     } = req.body;
 
-    const existingClass =
-      await Class.findOne({
-        className,
-        section
-      });
+    const existingClass = await Class.findOne({ className, section });
 
     if (existingClass) {
       return res.status(400).json({
         success: false,
-        message:
-          'Class with this name and section already exists'
+        message: 'Class with this name and section already exists'
       });
     }
 
-    const newClass =
-      await Class.create({
-        className,
-        section:
-          section || 'A',
-        classTeacher:
-          classTeacher || null,
-        academicYear:
-          academicYear ||
-          new Date()
-            .getFullYear()
-            .toString(),
-        subjects:
-          subjects || [],
-        roomNumber:
-          roomNumber || '',
-        maxStudents:
-          maxStudents || 50,
-        description:
-          description || '',
-        createdBy:
-          req.user.id
-      });
+    const newClass = await Class.create({
+      className,
+      section: section || 'A',
+      classTeacher: classTeacher || null,
+      academicYear: academicYear || new Date().getFullYear().toString(),
+      subjects: subjects || [],
+      roomNumber: roomNumber || '',
+      maxStudents: maxStudents || 50,
+      description: description || '',
+      createdBy: req.user.id
+    });
 
-    const populatedClass =
-      await Class.findById(
-        newClass._id
-      ).populate(
-        'classTeacher',
-        'name'
-      );
+    const populatedClass = await Class.findById(newClass._id).populate('classTeacher', 'name');
 
     res.status(201).json({
       success: true,
-      message:
-        'Class created successfully',
+      message: 'Class created successfully',
       data: populatedClass
     });
-
   } catch (error) {
-    console.error(
-      'Create class error:',
-      error
-    );
+    console.error('Create class error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -1349,10 +1018,7 @@ exports.createClass = async (
 // @desc    Update class
 // @route   PUT /api/admin/classes/:id
 // @access  Private (Admin only)
-exports.updateClass = async (
-  req,
-  res
-) => {
+exports.updateClass = async (req, res) => {
   try {
     const {
       className,
@@ -1366,7 +1032,6 @@ exports.updateClass = async (
       isActive
     } = req.body;
 
-    // Check duplicate class before update
     const duplicateClass = await Class.findOne({
       _id: { $ne: req.params.id },
       className,
@@ -1377,36 +1042,29 @@ exports.updateClass = async (
     if (duplicateClass) {
       return res.status(400).json({
         success: false,
-        message:
-          `Class ${className} - Section ${section} already exists for academic year ${academicYear}`
+        message: `Class ${className} - Section ${section} already exists for academic year ${academicYear}`
       });
     }
 
-    const updatedClass =
-      await Class.findByIdAndUpdate(
-        req.params.id,
-        {
-          className,
-          section,
-          classTeacher,
-          academicYear,
-          subjects,
-          roomNumber,
-          maxStudents,
-          description,
-          isActive,
-          updatedBy:
-            req.user.id
-        },
-        {
-          returnDocument:
-            'after',
-          runValidators: true
-        }
-      ).populate(
-        'classTeacher',
-        'name'
-      );
+    const updatedClass = await Class.findByIdAndUpdate(
+      req.params.id,
+      {
+        className,
+        section,
+        classTeacher,
+        academicYear,
+        subjects,
+        roomNumber,
+        maxStudents,
+        description,
+        isActive,
+        updatedBy: req.user.id
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).populate('classTeacher', 'name');
 
     if (!updatedClass) {
       return res.status(404).json({
@@ -1417,31 +1075,22 @@ exports.updateClass = async (
 
     res.status(200).json({
       success: true,
-      message:
-        'Class updated successfully',
+      message: 'Class updated successfully',
       data: updatedClass
     });
-
   } catch (error) {
-    console.error(
-      'Update class error:',
-      error
-    );
+    console.error('Update class error:', error);
 
-    // Handle MongoDB duplicate key error
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message:
-          'A class with the same class name, section and academic year already exists.'
+        message: 'A class with the same class name, section and academic year already exists.'
       });
     }
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -1449,15 +1098,9 @@ exports.updateClass = async (
 // @desc    Delete class
 // @route   DELETE /api/admin/classes/:id
 // @access  Private (Admin only)
-exports.deleteClass = async (
-  req,
-  res
-) => {
+exports.deleteClass = async (req, res) => {
   try {
-    const classData =
-      await Class.findByIdAndDelete(
-        req.params.id
-      );
+    const classData = await Class.findByIdAndDelete(req.params.id);
 
     if (!classData) {
       return res.status(404).json({
@@ -1468,338 +1111,10 @@ exports.deleteClass = async (
 
     res.status(200).json({
       success: true,
-      message:
-        'Class deleted successfully'
+      message: 'Class deleted successfully'
     });
-
   } catch (error) {
-    console.error(
-      'Delete class error:',
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-};
-
-// ==================== TIMETABLE MANAGEMENT ====================
-
-// @desc    Get timetable
-// @route   GET /api/admin/timetable
-// @access  Private (Admin only)
-exports.getTimetable = async (
-  req,
-  res
-) => {
-  try {
-    const {
-      class: className,
-      section
-    } = req.query;
-
-    let query = {};
-
-    if (className) {
-      query.class =
-        className;
-    }
-
-    if (section) {
-      query.section =
-        section;
-    }
-
-    const timetable =
-      await Timetable.find(query)
-        .populate(
-          'periods.teacher',
-          'name'
-        );
-
-    res.status(200).json({
-      success: true,
-      data: timetable
-    });
-
-  } catch (error) {
-    console.error(
-      'Get timetable error:',
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-};
-
-// @desc    Create or update timetable
-// @route   POST /api/admin/timetable
-// @access  Private (Admin only)
-exports.createTimetable = async (
-  req,
-  res
-) => {
-  try {
-    const {
-      class: className,
-      section,
-      day,
-      periods,
-      academicYear
-    } = req.body;
-
-    let timetable =
-      await Timetable.findOne({
-        class: className,
-        section,
-        day
-      });
-
-    if (timetable) {
-      timetable.periods =
-        periods;
-
-      timetable.academicYear =
-        academicYear;
-
-      await timetable.save();
-
-    } else {
-      timetable =
-        await Timetable.create({
-          class: className,
-          section,
-          day,
-          periods,
-          academicYear
-        });
-    }
-
-    const populatedTimetable =
-      await Timetable.findById(
-        timetable._id
-      ).populate(
-        'periods.teacher',
-        'name'
-      );
-
-    res.status(201).json({
-      success: true,
-      message:
-        'Timetable saved successfully',
-      data:
-        populatedTimetable
-    });
-
-  } catch (error) {
-    console.error(
-      'Create timetable error:',
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message:
-        error.message ||
-        'Server error'
-    });
-  }
-};
-
-// @desc    Delete timetable
-// @route   DELETE /api/admin/timetable/:id
-// @access  Private (Admin only)
-exports.deleteTimetable = async (
-  req,
-  res
-) => {
-  try {
-    const timetable =
-      await Timetable.findByIdAndDelete(
-        req.params.id
-      );
-
-    if (!timetable) {
-      return res.status(404).json({
-        success: false,
-        message:
-          'Timetable not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message:
-        'Timetable deleted successfully'
-    });
-
-  } catch (error) {
-    console.error(
-      'Delete timetable error:',
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-};
-
-// ==================== ATTENDANCE REPORTS ====================
-
-// @desc    Get attendance reports
-// @route   GET /api/admin/attendance-reports
-// @access  Private (Admin only)
-exports.getAttendanceReports = async (
-  req,
-  res
-) => {
-  try {
-    const {
-      class: className,
-      section,
-      month,
-      year
-    } = req.query;
-
-    let query = {};
-
-    if (className) {
-      query.class =
-        className;
-    }
-
-    if (section) {
-      query.section =
-        section;
-    }
-
-    if (month && year) {
-      const startDate =
-        new Date(
-          year,
-          month - 1,
-          1
-        );
-
-      const endDate =
-        new Date(
-          year,
-          month,
-          0
-        );
-
-      query.date = {
-        $gte: startDate,
-        $lte: endDate
-      };
-    }
-
-    const attendance =
-      await Attendance.find(query)
-        .populate(
-          'student',
-          'rollNumber'
-        )
-        .populate(
-          'user',
-          'name'
-        )
-        .sort({
-          date: -1
-        });
-
-    const totalRecords =
-      attendance.length;
-
-    const presentRecords =
-      attendance.filter(
-        a =>
-          a.status ===
-          'Present'
-      ).length;
-
-    const absentRecords =
-      attendance.filter(
-        a =>
-          a.status ===
-          'Absent'
-      ).length;
-
-    const lateRecords =
-      attendance.filter(
-        a =>
-          a.status ===
-          'Late'
-      ).length;
-
-    const groupedByDate =
-      attendance.reduce(
-        (acc, record) => {
-          const date =
-            record.date
-              .toISOString()
-              .split('T')[0];
-
-          if (!acc[date]) {
-            acc[date] = {
-              date,
-              present: 0,
-              absent: 0,
-              late: 0,
-              total: 0
-            };
-          }
-
-          acc[date][
-            record.status
-              .toLowerCase()
-          ]++;
-
-          acc[date].total++;
-
-          return acc;
-        },
-        {}
-      );
-
-    res.status(200).json({
-      success: true,
-      data: {
-        records:
-          attendance,
-        summary: {
-          totalRecords,
-          presentRecords,
-          absentRecords,
-          lateRecords,
-          attendancePercentage:
-            totalRecords > 0
-              ? (
-                  (presentRecords /
-                    totalRecords) *
-                  100
-                ).toFixed(2)
-              : 0
-        },
-        dailyBreakdown:
-          Object.values(
-            groupedByDate
-          )
-      }
-    });
-
-  } catch (error) {
-    console.error(
-      'Get attendance reports error:',
-      error
-    );
+    console.error('Delete class error:', error);
 
     res.status(500).json({
       success: false,
@@ -1833,7 +1148,6 @@ exports.createExam = async (req, res) => {
 
     const finalYear = academicYear || new Date().getFullYear().toString();
 
-    // Class না থাকলে auto-create
     let classData = await Class.findOne({
       className,
       section,
@@ -1849,7 +1163,6 @@ exports.createExam = async (req, res) => {
       });
     }
 
-    // Subject-এ teacher আছে?
     const subjectDoc = await Subject.findOne({
       name: subject,
       class: className,
@@ -1866,7 +1179,6 @@ exports.createExam = async (req, res) => {
     });
 
     if (exam) {
-      // একই exam-এ subject আগে থেকে আছে?
       const exists = exam.subjects.find(s => s.name === subject);
       if (exists) {
         return res.status(400).json({
@@ -1925,6 +1237,9 @@ exports.createExam = async (req, res) => {
   }
 };
 
+// @desc    Update exam
+// @route   PUT /api/admin/exams/:id
+// @access  Private (Admin only)
 exports.updateExam = async (req, res) => {
   try {
     const { examName, examDate, subject } = req.body;
@@ -1938,7 +1253,6 @@ exports.updateExam = async (req, res) => {
     if (examName) exam.examName = examName;
     if (examDate) exam.examDate = examDate;
 
-    // Subject name change + date change
     if (subject) {
       const sub = exam.subjects.find(s => s.name === subject);
       if (sub && examDate) {
@@ -1988,7 +1302,6 @@ exports.publishResult = async (req, res) => {
       message: 'Result published successfully',
       data: exam
     });
-
   } catch (error) {
     console.error('Publish result error:', error);
     res.status(500).json({
@@ -2038,6 +1351,10 @@ exports.getExams = async (req, res) => {
     });
   }
 };
+
+// @desc    Delete exam
+// @route   DELETE /api/admin/exams/:id
+// @access  Private (Admin only)
 exports.deleteExam = async (req, res) => {
   try {
     const exam = await Result.findById(req.params.id);
@@ -2070,33 +1387,32 @@ exports.deleteExam = async (req, res) => {
     });
   }
 };
+
 // ==================== NOTICE MANAGEMENT ====================
 
 // @desc    Create notice
 // @route   POST /api/admin/notices
 // @access  Private (Admin only)
-// @desc    Create notice
-// @route   POST /api/admin/notices
-// @access  Private (Admin only)
 exports.createNotice = async (req, res) => {
   try {
-    const { 
-      title, 
-      content, 
-      targetRoles, 
-      priority, 
-      expiresAt, 
+    const {
+      title,
+      content,
+      targetRoles,
+      priority,
+      expiresAt,
       attachments,
-      isPublic  // ✅ New field
+      isPublic
     } = req.body;
 
     const notice = await Notice.create({
       title,
       content,
       author: req.user.id,
-targetRoles: (Array.isArray(targetRoles) && targetRoles.length > 0) 
-  ? targetRoles 
-  : ['student', 'teacher', 'admin', 'parent'],      priority: priority || 'Medium',
+      targetRoles: (Array.isArray(targetRoles) && targetRoles.length > 0)
+        ? targetRoles
+        : ['student', 'teacher', 'admin', 'parent'],
+      priority: priority || 'Medium',
       expiresAt: expiresAt || null,
       attachments: attachments || [],
       isPublic: isPublic || false,
@@ -2123,36 +1439,22 @@ targetRoles: (Array.isArray(targetRoles) && targetRoles.length > 0)
 // @desc    Get all notices
 // @route   GET /api/admin/notices
 // @access  Private (Admin only)
-exports.getNotices = async (
-  req,
-  res
-) => {
+exports.getNotices = async (req, res) => {
   try {
-    const notices =
-      await Notice.find()
-        .populate(
-          'author',
-          'name'
-        )
-        .sort({
-          createdAt: -1
-        });
+    const notices = await Notice.find()
+      .populate('author', 'name')
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
       data: notices
     });
-
   } catch (error) {
-    console.error(
-      'Get notices error:',
-      error
-    );
+    console.error('Get notices error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };
@@ -2160,10 +1462,7 @@ exports.getNotices = async (
 // @desc    Update notice
 // @route   PUT /api/admin/notices/:id
 // @access  Private (Admin only)
-exports.updateNotice = async (
-  req,
-  res
-) => {
+exports.updateNotice = async (req, res) => {
   try {
     const {
       title,
@@ -2175,55 +1474,41 @@ exports.updateNotice = async (
       isActive
     } = req.body;
 
-    const notice =
-      await Notice.findByIdAndUpdate(
-        req.params.id,
-        {
-          title,
-          content,
-          targetRoles,
-          priority,
-          expiresAt,
-          attachments,
-          isActive,
-          
-        },
-        {
-          returnDocument:
-            'after',
-          runValidators: true
-        }
-      ).populate(
-        'author',
-        'name'
-      );
+    const notice = await Notice.findByIdAndUpdate(
+      req.params.id,
+      {
+        title,
+        content,
+        targetRoles,
+        priority,
+        expiresAt,
+        attachments,
+        isActive
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).populate('author', 'name');
 
     if (!notice) {
       return res.status(404).json({
         success: false,
-        message:
-          'Notice not found'
+        message: 'Notice not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      message:
-        'Notice updated successfully',
+      message: 'Notice updated successfully',
       data: notice
     });
-
   } catch (error) {
-    console.error(
-      'Update notice error:',
-      error
-    );
+    console.error('Update notice error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -2231,40 +1516,27 @@ exports.updateNotice = async (
 // @desc    Delete notice
 // @route   DELETE /api/admin/notices/:id
 // @access  Private (Admin only)
-exports.deleteNotice = async (
-  req,
-  res
-) => {
+exports.deleteNotice = async (req, res) => {
   try {
-    const notice =
-      await Notice.findByIdAndDelete(
-        req.params.id
-      );
+    const notice = await Notice.findByIdAndDelete(req.params.id);
 
     if (!notice) {
       return res.status(404).json({
         success: false,
-        message:
-          'Notice not found'
+        message: 'Notice not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      message:
-        'Notice deleted successfully'
+      message: 'Notice deleted successfully'
     });
-
   } catch (error) {
-    console.error(
-      'Delete notice error:',
-      error
-    );
+    console.error('Delete notice error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };
@@ -2343,7 +1615,6 @@ exports.createSubject = async (req, res) => {
       });
     }
 
-    // ✅ Class না থাকলে auto-create
     let classData = await Class.findOne({
       className,
       section: finalSection,
@@ -2376,7 +1647,6 @@ exports.createSubject = async (req, res) => {
       createdBy: req.user.id
     });
 
-    // ✅ Class-এর subjects array-তে subject যোগ
     await Class.findByIdAndUpdate(
       classData._id,
       {
@@ -2420,10 +1690,7 @@ exports.createSubject = async (req, res) => {
 // @desc    Update subject
 // @route   PUT /api/admin/subjects/:id
 // @access  Private (Admin only)
-exports.updateSubject = async (
-  req,
-  res
-) => {
+exports.updateSubject = async (req, res) => {
   try {
     const {
       name,
@@ -2440,71 +1707,54 @@ exports.updateSubject = async (
       isActive
     } = req.body;
 
-    const subject =
-      await Subject.findByIdAndUpdate(
-        req.params.id,
-        {
-          name,
-          code: code
-            ? code.toUpperCase()
-            : undefined,
-          description,
-          class: className,
-          section,
-          teacher,
-          academicYear,
-          totalMarks,
-          passingMarks,
-          theoryMarks,
-          practicalMarks,
-          isActive,
-          updatedBy:
-            req.user.id
-        },
-        {
-          returnDocument:
-            'after',
-          runValidators: true
-        }
-      ).populate(
-        'teacher',
-        'name email'
-      );
+    const subject = await Subject.findByIdAndUpdate(
+      req.params.id,
+      {
+        name,
+        code: code ? code.toUpperCase() : undefined,
+        description,
+        class: className,
+        section,
+        teacher,
+        academicYear,
+        totalMarks,
+        passingMarks,
+        theoryMarks,
+        practicalMarks,
+        isActive,
+        updatedBy: req.user.id
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).populate('teacher', 'name email');
 
     if (!subject) {
       return res.status(404).json({
         success: false,
-        message:
-          'Subject not found'
+        message: 'Subject not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      message:
-        'Subject updated successfully',
+      message: 'Subject updated successfully',
       data: subject
     });
-
   } catch (error) {
-    console.error(
-      'Update subject error:',
-      error
-    );
+    console.error('Update subject error:', error);
 
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message:
-          'Subject code already exists'
+        message: 'Subject code already exists'
       });
     }
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -2512,40 +1762,27 @@ exports.updateSubject = async (
 // @desc    Delete subject
 // @route   DELETE /api/admin/subjects/:id
 // @access  Private (Admin only)
-exports.deleteSubject = async (
-  req,
-  res
-) => {
+exports.deleteSubject = async (req, res) => {
   try {
-    const subject =
-      await Subject.findByIdAndDelete(
-        req.params.id
-      );
+    const subject = await Subject.findByIdAndDelete(req.params.id);
 
     if (!subject) {
       return res.status(404).json({
         success: false,
-        message:
-          'Subject not found'
+        message: 'Subject not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      message:
-        'Subject deleted successfully'
+      message: 'Subject deleted successfully'
     });
-
   } catch (error) {
-    console.error(
-      'Delete subject error:',
-      error
-    );
+    console.error('Delete subject error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };
@@ -2555,53 +1792,36 @@ exports.deleteSubject = async (
 // @desc    Add subject to class
 // @route   POST /api/admin/classes/:id/subjects
 // @access  Private (Admin only)
-exports.addSubjectToClass = async (
-  req,
-  res
-) => {
+exports.addSubjectToClass = async (req, res) => {
   try {
-    const { subjectId } =
-      req.body;
+    const { subjectId } = req.body;
 
-    const classData =
-      await Class.findById(
-        req.params.id
-      );
+    const classData = await Class.findById(req.params.id);
 
     if (!classData) {
       return res.status(404).json({
         success: false,
-        message:
-          'Class not found'
+        message: 'Class not found'
       });
     }
 
-    const subject =
-      await Subject.findById(
-        subjectId
-      );
+    const subject = await Subject.findById(subjectId);
 
     if (!subject) {
       return res.status(404).json({
         success: false,
-        message:
-          'Subject not found'
+        message: 'Subject not found'
       });
     }
 
-    const exists =
-      classData.subjects.some(
-        s =>
-          s.subject &&
-          s.subject.toString() ===
-            subjectId
-      );
+    const exists = classData.subjects.some(
+      s => s.subject && s.subject.toString() === subjectId
+    );
 
     if (exists) {
       return res.status(400).json({
         success: false,
-        message:
-          'Subject already assigned to this class'
+        message: 'Subject already assigned to this class'
       });
     }
 
@@ -2609,47 +1829,28 @@ exports.addSubjectToClass = async (
       subject: subjectId,
       name: subject.name,
       code: subject.code,
-      teacher:
-        subject.teacher,
-      teacherName:
-        subject.teacherName,
+      teacher: subject.teacher,
+      teacherName: subject.teacherName,
       isActive: true
     });
 
     await classData.save();
 
-    const updatedClass =
-      await Class.findById(
-        classData._id
-      )
-        .populate(
-          'classTeacher',
-          'name'
-        )
-        .populate(
-          'subjects.subject',
-          'name code'
-        );
+    const updatedClass = await Class.findById(classData._id)
+      .populate('classTeacher', 'name')
+      .populate('subjects.subject', 'name code');
 
     res.status(200).json({
       success: true,
-      message:
-        'Subject added to class successfully',
-      data:
-        updatedClass
+      message: 'Subject added to class successfully',
+      data: updatedClass
     });
-
   } catch (error) {
-    console.error(
-      'Add subject to class error:',
-      error
-    );
+    console.error('Add subject to class error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -2657,72 +1858,44 @@ exports.addSubjectToClass = async (
 // @desc    Remove subject from class
 // @route   DELETE /api/admin/classes/:id/subjects/:subjectId
 // @access  Private (Admin only)
-exports.removeSubjectFromClass = async (
-  req,
-  res
-) => {
+exports.removeSubjectFromClass = async (req, res) => {
   try {
-    const {
-      id,
-      subjectId
-    } = req.params;
+    const { id, subjectId } = req.params;
 
-    const classData =
-      await Class.findById(id);
+    const classData = await Class.findById(id);
 
     if (!classData) {
       return res.status(404).json({
         success: false,
-        message:
-          'Class not found'
+        message: 'Class not found'
       });
     }
 
-    classData.subjects =
-      classData.subjects.filter(
-        s =>
-          s.subject &&
-          s.subject.toString() !==
-            subjectId
-      );
+    classData.subjects = classData.subjects.filter(
+      s => s.subject && s.subject.toString() !== subjectId
+    );
 
     await classData.save();
 
-    const updatedClass =
-      await Class.findById(
-        classData._id
-      )
-        .populate(
-          'classTeacher',
-          'name'
-        )
-        .populate(
-          'subjects.subject',
-          'name code'
-        );
+    const updatedClass = await Class.findById(classData._id)
+      .populate('classTeacher', 'name')
+      .populate('subjects.subject', 'name code');
 
     res.status(200).json({
       success: true,
-      message:
-        'Subject removed from class successfully',
-      data:
-        updatedClass
+      message: 'Subject removed from class successfully',
+      data: updatedClass
     });
-
   } catch (error) {
-    console.error(
-      'Remove subject from class error:',
-      error
-    );
+    console.error('Remove subject from class error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
+
 // @desc    Get subject by ID
 // @route   GET /api/admin/subjects/:id
 // @access  Private (Admin only)
@@ -2744,7 +1917,6 @@ exports.getSubjectById = async (req, res) => {
       success: true,
       data: subject
     });
-
   } catch (error) {
     console.error('Get subject by ID error:', error);
 
@@ -2754,7 +1926,6 @@ exports.getSubjectById = async (req, res) => {
     });
   }
 };
-
 
 // @desc    Assign teacher to subject
 // @route   PUT /api/admin/subjects/:id/assign-teacher
@@ -2808,7 +1979,6 @@ exports.assignTeacher = async (req, res) => {
       message: 'Teacher assigned successfully',
       data: updatedSubject
     });
-
   } catch (error) {
     console.error('Assign teacher error:', error);
 
@@ -2818,87 +1988,52 @@ exports.assignTeacher = async (req, res) => {
     });
   }
 };
+
 // @desc    Assign class teacher
 // @route   PUT /api/admin/classes/:id/assign-teacher
 // @access  Private (Admin only)
-exports.assignClassTeacher = async (
-  req,
-  res
-) => {
+exports.assignClassTeacher = async (req, res) => {
   try {
-    const { teacherId } =
-      req.body;
+    const { teacherId } = req.body;
 
-    const classData =
-      await Class.findById(
-        req.params.id
-      );
+    const classData = await Class.findById(req.params.id);
 
     if (!classData) {
       return res.status(404).json({
         success: false,
-        message:
-          'Class not found'
+        message: 'Class not found'
       });
     }
 
-    const teacher =
-      await User.findById(
-        teacherId
-      );
+    const teacher = await User.findById(teacherId);
 
-    if (
-      !teacher ||
-      teacher.role !==
-        'teacher'
-    ) {
+    if (!teacher || teacher.role !== 'teacher') {
       return res.status(404).json({
         success: false,
-        message:
-          'Teacher not found'
+        message: 'Teacher not found'
       });
     }
 
-    classData.classTeacher =
-      teacherId;
-
-    classData.classTeacherName =
-      teacher.name;
+    classData.classTeacher = teacherId;
+    classData.classTeacherName = teacher.name;
 
     await classData.save();
 
-    const updatedClass =
-      await Class.findById(
-        classData._id
-      )
-        .populate(
-          'classTeacher',
-          'name email'
-        )
-        .populate(
-          'subjects.subject',
-          'name code'
-        );
+    const updatedClass = await Class.findById(classData._id)
+      .populate('classTeacher', 'name email')
+      .populate('subjects.subject', 'name code');
 
     res.status(200).json({
       success: true,
-      message:
-        'Class teacher assigned successfully',
-      data:
-        updatedClass
+      message: 'Class teacher assigned successfully',
+      data: updatedClass
     });
-
   } catch (error) {
-    console.error(
-      'Assign class teacher error:',
-      error
-    );
+    console.error('Assign class teacher error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        'Server error'
+      message: error.message || 'Server error'
     });
   }
 };
@@ -2908,52 +2043,37 @@ exports.assignClassTeacher = async (
 // @desc    Get class statistics
 // @route   GET /api/admin/classes/stats
 // @access  Private (Admin only)
-exports.getClassStats = async (
-  req,
-  res
-) => {
+exports.getClassStats = async (req, res) => {
   try {
-    const totalClasses =
-      await Class.countDocuments();
+    const totalClasses = await Class.countDocuments();
+    const activeClasses = await Class.countDocuments({ isActive: true });
+    const totalStudents = await Student.countDocuments();
 
-    const activeClasses =
-      await Class.countDocuments({
-        isActive: true
-      });
-
-    const totalStudents =
-      await Student.countDocuments();
-
-    const classDistribution =
-      await Student.aggregate([
-        {
-          $group: {
-            _id: {
-              class: '$class',
-              section: '$section'
-            },
-            count: {
-              $sum: 1
-            }
-          }
-        },
-        {
-          $project: {
-            class:
-              '$_id.class',
-            section:
-              '$_id.section',
-            count: 1,
-            _id: 0
-          }
-        },
-        {
-          $sort: {
-            class: 1,
-            section: 1
-          }
+    const classDistribution = await Student.aggregate([
+      {
+        $group: {
+          _id: {
+            class: '$class',
+            section: '$section'
+          },
+          count: { $sum: 1 }
         }
-      ]);
+      },
+      {
+        $project: {
+          class: '$_id.class',
+          section: '$_id.section',
+          count: 1,
+          _id: 0
+        }
+      },
+      {
+        $sort: {
+          class: 1,
+          section: 1
+        }
+      }
+    ]);
 
     res.status(200).json({
       success: true,
@@ -2964,17 +2084,12 @@ exports.getClassStats = async (
         classDistribution
       }
     });
-
   } catch (error) {
-    console.error(
-      'Get class stats error:',
-      error
-    );
+    console.error('Get class stats error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };
@@ -2982,61 +2097,37 @@ exports.getClassStats = async (
 // @desc    Search classes
 // @route   GET /api/admin/classes/search
 // @access  Private (Admin only)
-exports.searchClasses = async (
-  req,
-  res
-) => {
+exports.searchClasses = async (req, res) => {
   try {
-    const { q } =
-      req.query;
+    const { q } = req.query;
 
     if (!q) {
       return res.status(400).json({
         success: false,
-        message:
-          'Search term is required'
+        message: 'Search term is required'
       });
     }
 
-    const classes =
-      await Class.find({
-        $or: [
-          {
-            className: {
-              $regex: q,
-              $options: 'i'
-            }
-          },
-          {
-            section: {
-              $regex: q,
-              $options: 'i'
-            }
-          }
-        ],
-        isActive: true
-      })
-        .populate(
-          'classTeacher',
-          'name'
-        )
-        .limit(20);
+    const classes = await Class.find({
+      $or: [
+        { className: { $regex: q, $options: 'i' } },
+        { section: { $regex: q, $options: 'i' } }
+      ],
+      isActive: true
+    })
+      .populate('classTeacher', 'name')
+      .limit(20);
 
     res.status(200).json({
       success: true,
       data: classes
     });
-
   } catch (error) {
-    console.error(
-      'Search classes error:',
-      error
-    );
+    console.error('Search classes error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };
@@ -3046,64 +2137,46 @@ exports.searchClasses = async (
 // @desc    Update admin profile
 // @route   PUT /api/admin/profile
 // @access  Private (Admin only)
-exports.updateAdminProfile = async (
-  req,
-  res
-) => {
+exports.updateAdminProfile = async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      phone,
-      profilePicture
-    } = req.body;
+    const { name, email, phone, profilePicture } = req.body;
 
-    const user =
-      await User.findByIdAndUpdate(
-        req.user.id,
-        {
-          name,
-          email,
-          phone,
-          profilePicture
-        },
-        {
-          returnDocument:
-            'after',
-          runValidators: true
-        }
-      ).select(
-        '-password'
-      );
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        name,
+        email,
+        phone,
+        profilePicture
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).select('-password');
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message:
-          'User not found'
+        message: 'User not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      message:
-        'Profile updated successfully',
+      message: 'Profile updated successfully',
       data: user
     });
-
   } catch (error) {
-    console.error(
-      'Update admin profile error:',
-      error
-    );
+    console.error('Update admin profile error:', error);
 
     res.status(500).json({
       success: false,
-      message:
-        'Server error'
+      message: 'Server error'
     });
   }
 };
+
 // ==================== TIMETABLE MANAGEMENT ====================
 
 // @desc    Get timetable
@@ -3112,7 +2185,7 @@ exports.updateAdminProfile = async (
 exports.getTimetable = async (req, res) => {
   try {
     const { class: className, section } = req.query;
-    
+
     let query = {};
     if (className) query.class = className;
     if (section) query.section = section;
@@ -3138,29 +2211,26 @@ exports.getTimetable = async (req, res) => {
 // @access  Private (Admin only)
 exports.createTimetable = async (req, res) => {
   try {
-    const { 
-      class: className, 
-      section, 
-      day, 
-      periods, 
-      academicYear 
+    const {
+      class: className,
+      section,
+      day,
+      periods,
+      academicYear
     } = req.body;
 
-    // ✅ Check if timetable exists
-    let timetable = await Timetable.findOne({ 
-      class: className, 
-      section, 
-      day 
+    let timetable = await Timetable.findOne({
+      class: className,
+      section,
+      day
     });
 
     if (timetable) {
-      // ✅ Update existing
       timetable.periods = periods || timetable.periods;
       timetable.academicYear = academicYear || timetable.academicYear;
       timetable.updatedBy = req.user.id;
       await timetable.save();
     } else {
-      // ✅ Create new
       timetable = await Timetable.create({
         class: className,
         section: section || 'A',
@@ -3181,20 +2251,140 @@ exports.createTimetable = async (req, res) => {
     });
   } catch (error) {
     console.error('Create timetable error:', error);
-    
+
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
         message: 'Timetable already exists for this class, section, and day'
       });
     }
-    
+
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
     });
   }
 };
+
+// @desc    Delete timetable
+// @route   DELETE /api/admin/timetable/:id
+// @access  Private (Admin only)
+exports.deleteTimetable = async (req, res) => {
+  try {
+    const timetable = await Timetable.findByIdAndDelete(req.params.id);
+
+    if (!timetable) {
+      return res.status(404).json({
+        success: false,
+        message: 'Timetable not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Timetable deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete timetable error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// ==================== ATTENDANCE REPORTS ====================
+
+// @desc    Get attendance reports
+// @route   GET /api/admin/attendance-reports
+// @access  Private (Admin only)
+exports.getAttendanceReports = async (req, res) => {
+  try {
+    const {
+      class: className,
+      section,
+      month,
+      year
+    } = req.query;
+
+    let query = {};
+
+    if (className) {
+      query.class = className;
+    }
+
+    if (section) {
+      query.section = section;
+    }
+
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+
+      query.date = {
+        $gte: startDate,
+        $lte: endDate
+      };
+    }
+
+    const attendance = await Attendance.find(query)
+      .populate('student', 'rollNumber')
+      .populate('user', 'name')
+      .sort({ date: -1 });
+
+    const totalRecords = attendance.length;
+
+    const presentRecords = attendance.filter(a => a.status === 'Present').length;
+    const absentRecords = attendance.filter(a => a.status === 'Absent').length;
+    const lateRecords = attendance.filter(a => a.status === 'Late').length;
+
+    const groupedByDate = attendance.reduce((acc, record) => {
+      const date = record.date.toISOString().split('T')[0];
+
+      if (!acc[date]) {
+        acc[date] = {
+          date,
+          present: 0,
+          absent: 0,
+          late: 0,
+          total: 0
+        };
+      }
+
+      acc[date][record.status.toLowerCase()]++;
+      acc[date].total++;
+
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      data: {
+        records: attendance,
+        summary: {
+          totalRecords,
+          presentRecords,
+          absentRecords,
+          lateRecords,
+          attendancePercentage:
+            totalRecords > 0
+              ? ((presentRecords / totalRecords) * 100).toFixed(2)
+              : 0
+        },
+        dailyBreakdown: Object.values(groupedByDate)
+      }
+    });
+  } catch (error) {
+    console.error('Get attendance reports error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
 // ==================== PARENT MANAGEMENT ====================
 
 // @desc    Create parent account
@@ -3208,13 +2398,12 @@ exports.createParent = async (req, res) => {
       name,
       email,
       phone,
-      children,  // Array of student IDs
+      children,
       occupation,
       relationship,
       address
     } = req.body;
 
-    // ✅ Check if username exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({
@@ -3223,7 +2412,6 @@ exports.createParent = async (req, res) => {
       });
     }
 
-    // ✅ Check if email exists
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
       return res.status(400).json({
@@ -3232,7 +2420,6 @@ exports.createParent = async (req, res) => {
       });
     }
 
-    // ✅ Create user
     const user = await User.create({
       username,
       password,
@@ -3243,7 +2430,6 @@ exports.createParent = async (req, res) => {
       isActive: true
     });
 
-    // ✅ Create parent profile
     const parent = await Parent.create({
       user: user._id,
       children: children || [],
@@ -3264,14 +2450,14 @@ exports.createParent = async (req, res) => {
         parent: populatedParent,
         credentials: {
           username,
-          password,  // Only sent once during creation
+          password,
           role: 'parent'
         }
       }
     });
   } catch (error) {
     console.error('Create parent error:', error);
-    
+
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
@@ -3279,7 +2465,7 @@ exports.createParent = async (req, res) => {
         message: `${field} already exists. Please use a different ${field}.`
       });
     }
-    
+
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -3392,7 +2578,6 @@ exports.updateParent = async (req, res) => {
       });
     }
 
-    // Update user
     await User.findByIdAndUpdate(parent.user, {
       name,
       email,
@@ -3400,7 +2585,6 @@ exports.updateParent = async (req, res) => {
       isActive
     });
 
-    // Update parent
     const updatedParent = await Parent.findByIdAndUpdate(
       parentId,
       {
@@ -3411,7 +2595,7 @@ exports.updateParent = async (req, res) => {
       },
       { returnDocument: 'after', runValidators: true }
     ).populate('user', '-password')
-     .populate('children', 'rollNumber class section');
+      .populate('children', 'rollNumber class section');
 
     res.status(200).json({
       success: true,
@@ -3463,7 +2647,7 @@ exports.resetParentPassword = async (req, res) => {
   try {
     const { newPassword } = req.body;
     const parent = await Parent.findById(req.params.id);
-    
+
     if (!parent) {
       return res.status(404).json({
         success: false,

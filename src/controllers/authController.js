@@ -2,8 +2,7 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinaryUpload');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -161,7 +160,7 @@ exports.updateProfile = async (req, res) => {
           parentPhone,
           address
         },
-       { returnDocument: "after", runValidators: true }
+        { returnDocument: "after", runValidators: true }
       );
     }
 
@@ -294,7 +293,7 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// @desc    Upload profile photo
+// @desc    Upload profile photo (Cloudinary)
 // @route   POST /api/auth/upload-photo
 // @access  Private
 exports.uploadProfilePhoto = async (req, res) => {
@@ -306,14 +305,9 @@ exports.uploadProfilePhoto = async (req, res) => {
       });
     }
 
-    // Get user safely
     const userId = req.user?.id || req.user?._id;
 
     if (!userId) {
-      if (req.file) {
-        fs.unlink(req.file.path, () => {});
-      }
-
       return res.status(401).json({
         success: false,
         message: 'Authentication required'
@@ -329,58 +323,16 @@ exports.uploadProfilePhoto = async (req, res) => {
       });
     }
 
-    // Delete old profile photo if exists
-    if (user.profilePicture) {
-      const oldPhotoPath = path.join(
-        __dirname,
-        '..',
-        user.profilePicture
-      );
-
-      if (fs.existsSync(oldPhotoPath)) {
-        fs.unlinkSync(oldPhotoPath);
-      }
-
-      // Also delete thumbnails
-      const dir = path.dirname(oldPhotoPath);
-      const basename = path.basename(
-        oldPhotoPath,
-        path.extname(oldPhotoPath)
-      );
-
-      const extensions = [
-        '.jpg',
-        '.jpeg',
-        '.png',
-        '.gif',
-        '.webp'
-      ];
-
-      const suffixes = [
-        '-small',
-        '-medium',
-        '-large'
-      ];
-
-      for (let suffix of suffixes) {
-        for (let ext of extensions) {
-          const thumbPath = path.join(
-            dir,
-            `${basename}${suffix}${ext}`
-          );
-
-          if (fs.existsSync(thumbPath)) {
-            fs.unlinkSync(thumbPath);
-          }
-        }
-      }
+    // Delete old photo from Cloudinary
+    if (user.profilePicturePublicId) {
+      await deleteFromCloudinary(user.profilePicturePublicId);
     }
 
-    // Update user with new photo URL
-    const photoUrl =
-      `/uploads/profiles/${path.basename(req.file.filename)}`;
+    // Upload new photo to Cloudinary
+    const { url, publicId } = await uploadToCloudinary(req.file.buffer, 'school/profiles');
 
-    user.profilePicture = photoUrl;
+    user.profilePicture = url;
+    user.profilePicturePublicId = publicId;
 
     await user.save();
 
@@ -388,20 +340,11 @@ exports.uploadProfilePhoto = async (req, res) => {
       success: true,
       message: 'Profile photo uploaded successfully',
       data: {
-        profilePicture: photoUrl
+        profilePicture: url
       }
     });
   } catch (error) {
     console.error('Upload photo error:', error);
-
-    // Delete uploaded file if error
-    if (req.file) {
-      fs.unlink(req.file.path, (err) => {
-        if (err) {
-          console.error('Error deleting file:', err);
-        }
-      });
-    }
 
     res.status(500).json({
       success: false,
@@ -410,7 +353,7 @@ exports.uploadProfilePhoto = async (req, res) => {
   }
 };
 
-// @desc    Remove profile photo
+// @desc    Remove profile photo (Cloudinary)
 // @route   DELETE /api/auth/remove-photo
 // @access  Private
 exports.removeProfilePhoto = async (req, res) => {
@@ -424,57 +367,19 @@ exports.removeProfilePhoto = async (req, res) => {
       });
     }
 
-    if (!user.profilePicture) {
+    if (!user.profilePicture && !user.profilePicturePublicId) {
       return res.status(400).json({
         success: false,
         message: 'No profile photo to remove'
       });
     }
 
-    const photoPath = path.join(
-      __dirname,
-      '..',
-      user.profilePicture
-    );
-
-    if (fs.existsSync(photoPath)) {
-      fs.unlinkSync(photoPath);
+    if (user.profilePicturePublicId) {
+      await deleteFromCloudinary(user.profilePicturePublicId);
     }
 
-    const dir = path.dirname(photoPath);
-    const basename = path.basename(
-      photoPath,
-      path.extname(photoPath)
-    );
-
-    const extensions = [
-      '.jpg',
-      '.jpeg',
-      '.png',
-      '.gif',
-      '.webp'
-    ];
-
-    const suffixes = [
-      '-small',
-      '-medium',
-      '-large'
-    ];
-
-    for (let suffix of suffixes) {
-      for (let ext of extensions) {
-        const thumbPath = path.join(
-          dir,
-          `${basename}${suffix}${ext}`
-        );
-
-        if (fs.existsSync(thumbPath)) {
-          fs.unlinkSync(thumbPath);
-        }
-      }
-    }
-
-    user.profilePicture = null;
+    user.profilePicture = '';
+    user.profilePicturePublicId = '';
 
     await user.save();
 
